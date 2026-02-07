@@ -1,0 +1,5 @@
+pypdf
+reportlab
+python-dotenv
+httpx
+dedalus-labs
