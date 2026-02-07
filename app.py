@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 import arxiv
 from dedalus_labs import AsyncDedalus
 from tartan_backend.semantic_scholar import SemanticScholarClient
+from tartan_backend.openalex import OpenAlexClient
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -113,7 +114,7 @@ OUTPUT FORMAT:
         scores = data.get("scores", [])
         
         if not isinstance(scores, list) or len(scores) != len(candidates_list):
-            return candidates_list[:10]
+            return candidates_list[:3]
         
         # Zip and sort by score
         combined = []
@@ -125,19 +126,26 @@ OUTPUT FORMAT:
         filtered = [r for r, s in ranked if s > 6]
         return filtered
     except Exception:
-        return candidates_list[:10]
+        return candidates_list[:3]
+
+PDF_MAGIC = b"%PDF"
 
 async def download_pdf_from_url(url: str, output_path: Path) -> bool:
-    """Download a PDF from an arbitrary URL (Open Access)."""
+    """Download a PDF from an arbitrary URL (Open Access). Only saves if response is actually PDF."""
     try:
         response = await asyncio.to_thread(requests.get, url, timeout=30, stream=True)
         response.raise_for_status()
+        first_chunk = next(response.iter_content(chunk_size=8), None)
+        if not first_chunk or not first_chunk.startswith(PDF_MAGIC):
+            print(f"Skipping non-PDF response from {url[:80]}... (got {first_chunk[:20] if first_chunk else b''!r})", flush=True)
+            return False
         with open(output_path, "wb") as f:
+            f.write(first_chunk)
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         return True
     except Exception as e:
-        print(f"Failed to download PDF from {url}: {e}")
+        print(f"Failed to download PDF from {url}: {e}", flush=True)
         return False
 
 async def download_papers(papers_dir: str, results: list) -> None:
@@ -346,50 +354,82 @@ async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
                 print(f"[DEBUG] Starting query conversion for: {query}", flush=True)
                 arxiv_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
                 print(f"[DEBUG] Query converted to: {arxiv_query}", flush=True)
-                yield json.dumps({"type": "log", "message": f"Searching arXiv and Semantic Scholar for: {arxiv_query}"}) + "\n"
+                yield json.dumps({"type": "log", "message": f"Searching arXiv, Semantic Scholar, and OpenAlex for: {arxiv_query}"}) + "\n"
             except Exception as e:
                 print(f"[ERROR] Query conversion failed: {e}", flush=True)
                 arxiv_query = query  # Fallback to original query
                 yield json.dumps({"type": "log", "message": f"Using original query: {arxiv_query}"}) + "\n"
             
-            # 1. Broad Scanning: arXiv
-            try:
-                print(f"[DEBUG] Searching arXiv...", flush=True)
+            # Run all three source searches in parallel
+            def run_arxiv_search():
                 search = arxiv.Search(query=arxiv_query, max_results=50)
                 arxiv_client = arxiv.Client(page_size=50)
-                arxiv_results = list(arxiv_client.results(search))
-                print(f"[DEBUG] Found {len(arxiv_results)} arXiv results", flush=True)
-            except Exception as e:
-                print(f"[ERROR] arXiv search failed: {e}", flush=True)
-                arxiv_results = []
-            
-            # 2. Broad Scanning: Semantic Scholar
-            try:
-                print(f"[DEBUG] Searching Semantic Scholar...", flush=True)
-                ss_client = SemanticScholarClient()
-                ss_results = await asyncio.to_thread(ss_client.search_papers, arxiv_query, limit=50)
-                ss_oa_results = [r for r in ss_results if r.get("openAccessPdf")]
-                print(f"[DEBUG] Found {len(ss_oa_results)} Semantic Scholar OA results", flush=True)
-            except Exception as e:
-                print(f"[ERROR] Semantic Scholar search failed: {e}", flush=True)
-                ss_oa_results = []
-            
-            all_candidates = arxiv_results + ss_oa_results
-            
-            if not all_candidates:
-                yield json.dumps({"type": "error", "detail": "No open-access papers found across all databases."}) + "\n"
+                return list(arxiv_client.results(search))
+
+            ss_client = SemanticScholarClient()
+            openalex_client = OpenAlexClient()
+
+            async def search_arxiv():
+                try:
+                    results = await asyncio.to_thread(run_arxiv_search)
+                    print(f"[DEBUG] Found {len(results)} arXiv results", flush=True)
+                    return results
+                except Exception as e:
+                    print(f"[ERROR] arXiv search failed: {e}", flush=True)
+                    return []
+
+            async def search_semantic_scholar():
+                try:
+                    results = await asyncio.to_thread(ss_client.search_papers, arxiv_query, limit=50)
+                    oa = [r for r in results if r.get("openAccessPdf")]
+                    print(f"[DEBUG] Found {len(oa)} Semantic Scholar OA results", flush=True)
+                    return oa
+                except Exception as e:
+                    print(f"[ERROR] Semantic Scholar search failed: {e}", flush=True)
+                    return []
+
+            async def search_openalex():
+                try:
+                    results = await asyncio.to_thread(
+                        openalex_client.search_papers, arxiv_query, limit=25
+                    )
+                    print(f"[DEBUG] Found {len(results)} OpenAlex OA results", flush=True)
+                    return results
+                except Exception as e:
+                    print(f"[ERROR] OpenAlex search failed: {e}", flush=True)
+                    return []
+
+            arxiv_results, ss_oa_results, openalex_results = await asyncio.gather(
+                search_arxiv(),
+                search_semantic_scholar(),
+                search_openalex(),
+            )
+
+            primary_candidates = arxiv_results + ss_oa_results
+            if not primary_candidates and not openalex_results:
+                yield json.dumps({"type": "error", "detail": "No open-access papers found across arXiv, Semantic Scholar, or OpenAlex."}) + "\n"
                 return
 
-            yield json.dumps({"type": "log", "message": f"Scanning {len(all_candidates)} candidates across multiple databases..."}) + "\n"
-            
-            # Rank candidates (Unified)
             dedalus_client = AsyncDedalus(api_key=os.getenv("DEDALUS_API_KEY"))
-            ranked_results = await rank_candidates(dedalus_client, query, all_candidates)
-            
-            # Production: Use up to 10 papers for comprehensive research
-            top_papers = ranked_results[:10]
-            
-            discarded = len(all_candidates) - len(top_papers)
+            max_papers = 3
+
+            # Prioritize arXiv + Semantic Scholar; fill remaining slots from OpenAlex only
+            if primary_candidates:
+                yield json.dumps({"type": "log", "message": f"Ranking {len(primary_candidates)} candidates from arXiv and Semantic Scholar..."}) + "\n"
+                ranked_primary = await rank_candidates(dedalus_client, query, primary_candidates)
+                top_papers = ranked_primary[:max_papers]
+                remaining_slots = max_papers - len(top_papers)
+                if remaining_slots > 0 and openalex_results:
+                    yield json.dumps({"type": "log", "message": f"Filling {remaining_slots} slot(s) from OpenAlex ({len(openalex_results)} candidates)..."}) + "\n"
+                    ranked_openalex = await rank_candidates(dedalus_client, query, openalex_results)
+                    top_papers = top_papers + ranked_openalex[:remaining_slots]
+            else:
+                yield json.dumps({"type": "log", "message": f"Using OpenAlex only ({len(openalex_results)} candidates)..."}) + "\n"
+                ranked_openalex = await rank_candidates(dedalus_client, query, openalex_results)
+                top_papers = ranked_openalex[:max_papers]
+
+            all_considered = len(primary_candidates) + len(openalex_results)
+            discarded = all_considered - len(top_papers)
             if len(top_papers) < 3:
                 yield json.dumps({"type": "log", "message": f"Note: Found {len(top_papers)} verified matches."}) + "\n"
             else:

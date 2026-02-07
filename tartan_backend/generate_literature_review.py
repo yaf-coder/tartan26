@@ -20,7 +20,9 @@ LITERATURE_REVIEW_SYSTEM = (
     "Given a research question and evidence from multiple sources, write a comprehensive, "
     "well-structured literature review in academic style. Use proper section headings, "
     "synthesize findings across sources, identify themes, and provide critical analysis. "
-    "Maintain neutral, scholarly tone. Cite sources naturally using [Filename] notation."
+    "Maintain neutral, scholarly tone. "
+    "Use numbered citations: in-text cite only the number in square brackets, e.g. [1], [2]. "
+    "In the References section, list sources as a numbered list (1. ..., 2. ..., etc.)."
 )
 
 
@@ -53,20 +55,31 @@ async def generate_review_async(args):
         if content:
             sources_data[filename].append(content)
 
-    # Build comprehensive prompt
+    # Build comprehensive prompt with numbered sources
     source_count = len(sources_data)
     total_evidence = len(rows)
-   
+    # Fixed order for consistent numbering
+    sources_ordered = sorted(sources_data.keys())
+    source_num_to_name = {i: name for i, name in enumerate(sources_ordered, start=1)}
+
     evidence_by_source = []
-    for filename, contents in sources_data.items():
+    for num, filename in enumerate(sources_ordered, start=1):
+        contents = sources_data[filename]
         evidence_str = "\n".join([f"  - {c}" for c in contents[:10]])  # Max 10 per source
-        evidence_by_source.append(f"**[{filename}]**\n{evidence_str}")
+        evidence_by_source.append(f"**[{num}] {filename}**\n{evidence_str}")
+
+    references_instruction = "\n".join(
+        [f"{i}. {name}" for i, name in source_num_to_name.items()]
+    )
 
     prompt = f"""
 Research Question: {args.rq}
 
 Sources Analyzed: {source_count} papers
 Evidence Items: {total_evidence} findings
+
+Source numbering (use these numbers for in-text citations and references):
+{references_instruction}
 
 Evidence from Sources:
 {chr(10).join(evidence_by_source)}
@@ -103,11 +116,15 @@ Organize findings into 2-4 major themes. For each theme:
 - Future directions
 
 ## References
-List all sources cited (use the filenames provided above)
+List all sources as a numbered bibliography. Use the same numbers as in-text:
+1. <full reference for source 1 - use the filename/title as the reference>
+2. <full reference for source 2>
+... and so on for each source.
 
 Requirements:
 - Use markdown formatting with proper headings
-- Cite sources naturally: [Source_Name]
+- In-text citations: use only the number in square brackets, e.g. [1], [2], [3]
+- References section: numbered list (1. ..., 2. ..., etc.) matching the citation numbers
 - Synthesize across sources (don't just list findings)
 - Maintain academic tone
 - Be comprehensive but concise

@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from pypdf import PdfReader
 
-from dedalus_labs import AsyncDedalus, RateLimitError
+from dedalus_labs import (
+    APIConnectionError,
+    APITimeoutError,
+    AsyncDedalus,
+    InternalServerError,
+    RateLimitError,
+)
 
 # Load .env from same directory as this file (bulletproof)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
@@ -32,6 +38,9 @@ _rate_lock = asyncio.Lock()
 _last_request_time = 0.0
 MIN_REQUEST_INTERVAL = 0.5
 RATE_LIMIT_WAIT_SEC = 62
+# Retry backoff for 502/timeouts (seconds)
+TRANSIENT_ERROR_WAIT_BASE = 3
+MAX_CHAT_ATTEMPTS = 5
 
 
 # ----------------------------
@@ -67,7 +76,21 @@ def sanitize_text(text: str) -> str:
 
 
 def extract_pdf_pages(pdf_path: str) -> List[Tuple[int, str]]:
-    reader = PdfReader(pdf_path)
+    """Extract text from PDF pages. Returns [] if file is not a valid PDF (e.g. HTML error page)."""
+    try:
+        with open(pdf_path, "rb") as f:
+            header = f.read(8)
+        if not header.startswith(b"%PDF"):
+            print(f"[LOG] Skipping non-PDF file (invalid header): {os.path.basename(pdf_path)}", flush=True)
+            return []
+    except OSError as e:
+        print(f"[LOG] Could not read {pdf_path}: {e}", flush=True)
+        return []
+    try:
+        reader = PdfReader(pdf_path)
+    except Exception as e:
+        print(f"[LOG] Invalid or truncated PDF (skipping): {os.path.basename(pdf_path)} — {e}", flush=True)
+        return []
     pages: List[Tuple[int, str]] = []
     for i, page in enumerate(reader.pages):
         try:
@@ -198,11 +221,20 @@ async def _throttle() -> None:
         _last_request_time = time.monotonic()
 
 
+def _is_transient_error(e: BaseException) -> bool:
+    """True if the error is worth retrying (502, timeout, connection, etc.)."""
+    return isinstance(
+        e,
+        (InternalServerError, APIConnectionError, APITimeoutError),
+    )
+
+
 async def chat_json(client: AsyncDedalus, model: str, system: str, user: str) -> str:
     """
-    Call Dedalus chat completions. Throttled to stay under 60/min; retries on 429.
+    Call Dedalus chat completions. Throttled to stay under 60/min.
+    Retries on 429 (rate limit) and on transient errors (502, timeout, connection).
     """
-    for attempt in range(1, 4):
+    for attempt in range(1, MAX_CHAT_ATTEMPTS + 1):
         await _throttle()
         try:
             resp = await client.chat.completions.create(
@@ -216,9 +248,17 @@ async def chat_json(client: AsyncDedalus, model: str, system: str, user: str) ->
                 return resp.choices[0].message.content
             except Exception:
                 return str(resp)
-        except RateLimitError:
-            if attempt < 3:
+        except RateLimitError as e:
+            if attempt < MAX_CHAT_ATTEMPTS:
+                print(f"[LOG] Rate limited; waiting {RATE_LIMIT_WAIT_SEC}s before retry...", flush=True)
                 await asyncio.sleep(RATE_LIMIT_WAIT_SEC)
+            else:
+                raise
+        except BaseException as e:
+            if _is_transient_error(e) and attempt < MAX_CHAT_ATTEMPTS:
+                wait = TRANSIENT_ERROR_WAIT_BASE * (2 ** (attempt - 1))
+                print(f"[LOG] API error ({type(e).__name__}), retry in {wait}s (attempt {attempt}/{MAX_CHAT_ATTEMPTS})...", flush=True)
+                await asyncio.sleep(wait)
             else:
                 raise
 
