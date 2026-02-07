@@ -1,73 +1,160 @@
 /**
  * =============================================================================
- * LITERATURE REVIEW STYLES
+ * LITERATURE REVIEW STYLES - CLEAN LAYOUT
  * =============================================================================
  */
 
 .literature-review {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
-    animation: slideUp var(--transition-normal) ease-out;
+    gap: 1.5rem;
+    animation: slideUp 0.3s ease-out;
 }
 
 /* Header */
 .literature-review__header {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0.75rem;
 }
 
 .literature-review__title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text-primary);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: hsl(220, 20%, 20%);
 }
 
-/* Stats badges row */
+/* Stats badges */
 .literature-review__stats {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-3);
+    gap: 0.625rem;
 }
 
 .literature-review__stat {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-1);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    background-color: var(--color-background-alt);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-full);
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: hsl(220, 15%, 45%);
+    background: hsl(220, 15%, 96%);
+    padding: 0.375rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid hsl(220, 15%, 90%);
 }
 
 .literature-review__stat strong {
-    color: var(--color-text-primary);
-    font-weight: var(--font-weight-semibold);
+    color: hsl(var(--primary-hue), 65%, 50%);
+    font-weight: 700;
+}
+
+/* Research Report Download Button */
+.literature-review__report-download {
+    margin: 0.5rem 0;
+}
+
+.literature-review__report-btn {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg,
+            hsl(var(--primary-hue), 65%, 54%),
+            hsl(var(--primary-hue), 70%, 58%));
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px hsla(var(--primary-hue), 60%, 40%, 0.2);
+}
+
+.literature-review__report-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px hsla(var(--primary-hue), 60%, 40%, 0.3);
+}
+
+.literature-review__report-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.literature-review__report-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+}
+
+.literature-review__report-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.literature-review__report-subtitle {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.literature-review__report-arrow {
+    flex-shrink: 0;
 }
 
 /* Section titles */
 .literature-review__section-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    margin-bottom: var(--space-3);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: hsl(220, 20%, 20%);
+    margin-bottom: 0.75rem;
 }
 
-/* Summary section */
+/* Executive Summary */
 .literature-review__summary {
-    padding: var(--space-6);
-    background-color: var(--color-primary-subtle);
-    border-radius: var(--radius-lg);
-    border-left: 4px solid var(--color-primary);
+    padding: 1.5rem;
+    background: hsl(var(--primary-hue), 70%, 96%);
+    border-radius: 8px;
+    border: 1px solid hsl(var(--primary-hue), 60%, 88%);
+}
+
+.literature-review__summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.literature-review__download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    background: hsl(var(--primary-hue), 65%, 54%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.literature-review__download-btn:hover:not(:disabled) {
+    background: hsl(var(--primary-hue), 70%, 50%);
+}
+
+.literature-review__download-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .literature-review__summary-text {
-    font-size: var(--font-size-base);
-    line-height: 1.8;
-    color: var(--color-text-secondary);
-    margin-bottom: 0;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: hsl(220, 15%, 25%);
+    font-family: 'Georgia', serif;
+    text-align: justify;
 }
 
 /* Sources section */
@@ -76,9 +163,29 @@
     flex-direction: column;
 }
 
-/* Scrollable source list */
+.literature-review__sources-hint {
+    font-size: 0.8125rem;
+    color: hsl(220, 15%, 55%);
+    margin-bottom: 1rem;
+    font-style: italic;
+}
+
+/* Source list */
 .literature-review__source-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: 0.75rem;
+}
+
+/* Animations */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

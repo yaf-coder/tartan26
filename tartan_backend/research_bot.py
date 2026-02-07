@@ -41,6 +41,31 @@ def normalize_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
 
+def sanitize_text(text: str) -> str:
+    """
+    Clean text to remove invalid Unicode characters (surrogates, etc).
+    
+    PDFs with mathematical symbols often contain Unicode surrogate pairs
+    that cannot be encoded in UTF-8, causing UnicodeEncodeError.
+    """
+    if not text:
+        return text
+    
+    cleaned = []
+    for char in text:
+        # Remove surrogate characters (U+D800 to U+DFFF)
+        if 0xD800 <= ord(char) <= 0xDFFF:
+            cleaned.append(' ')
+        # Remove other problematic control characters
+        elif ord(char) < 32 and char not in '\n\t\r':
+            cleaned.append(' ')
+        else:
+            cleaned.append(char)
+    
+    return ''.join(cleaned)
+
+
+
 def extract_pdf_pages(pdf_path: str) -> List[Tuple[int, str]]:
     reader = PdfReader(pdf_path)
     pages: List[Tuple[int, str]] = []
@@ -136,6 +161,8 @@ SYSTEM = (
 
 
 def user_prompt(rq: str, page_start: int, page_end: int, text: str, max_quotes: int) -> str:
+    # Sanitize text to remove Unicode surrogates from math PDFs
+    text = sanitize_text(text)
     return f"""
 RESEARCH QUESTION:
 {rq}
