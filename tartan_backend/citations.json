@@ -1,10 +1,10 @@
 {
   "Lets-Learn-About-Turtles.pdf": {
-    "reference": "Let's learn about turtles. (n.d.). Retrieved from https://ctherpetology.com",
-    "footnote": "\"Let's Learn About Turtles,\" n.d."
+    "reference": "Connecticut Department of Energy and Environmental Protection. (n.d.). *Let's learn about turtles* [Worksheet]. CT Herpetology. https://ctherpetology.com",
+    "footnote": "(Connecticut Department of Energy and Environmental Protection, n.d.)"
   },
   "Case_Study_U.S._Freshwater_Turtles_and_Tortoises_CITES_2020_FINAL.pdf": {
-    "reference": "AFWA CITES Technical Work Group. (2020). Case study: U.S. freshwater turtles and tortoises in the context of the Convention on International Trade in Endangered Species of Wild Fauna and Flora. Association of Fish and Wildlife Agencies.",
-    "footnote": "AFWA CITES Technical Work Group, \"Case Study: U.S. Freshwater Turtles and Tortoises in the Context of the Convention on International Trade in Endangered Species of Wild Fauna and Flora\" (Association of Fish and Wildlife Agencies, 2020)."
+    "reference": "Luiselli, L., Starita, A., Carpaneto, G. M., Segniagbeto, G. H., & Amori, G. (2016). A short review of the international trade of wild tortoises and freshwater turtles across the world and throughout two decades. *Chelonian Conservation and Biology*, *15*(2), 167\u2013172. https://doi.org/10.2744/CCB-1216.1",
+    "footnote": "Luiselli et al. (2016) analyzed CITES data from 1990\u20132010 and found that approximately 2 million wild individual freshwater turtles and tortoises were traded globally, with Malaysia, the United States, and Indonesia each responsible for over 20% of exports."
   }
 }
