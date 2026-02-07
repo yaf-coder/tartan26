@@ -48,7 +48,7 @@
     font-weight: 700;
 }
 
-/* Research Report Download Button */
+/* Research Report Download Button - EXPLICIT COLORS FOR VISIBILITY */
 .literature-review__report-download {
     margin: 0.5rem 0;
 }
@@ -58,21 +58,22 @@
     align-items: center;
     gap: 1rem;
     width: 100%;
-    padding: 1rem 1.25rem;
-    background: linear-gradient(135deg,
-            hsl(var(--primary-hue), 65%, 54%),
-            hsl(var(--primary-hue), 70%, 58%));
-    color: white;
+    padding: 1.25rem 1.5rem;
+    /* Explicit bright blue gradient that WILL be visible */
+    background: linear-gradient(135deg, #4F46E5, #6366F1) !important;
+    color: white !important;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px hsla(var(--primary-hue), 60%, 40%, 0.2);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    font-weight: 600;
 }
 
 .literature-review__report-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px hsla(var(--primary-hue), 60%, 40%, 0.3);
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #4338CA, #4F46E5) !important;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
 }
 
 .literature-review__report-btn:disabled {
@@ -85,21 +86,23 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.125rem;
+    gap: 0.25rem;
 }
 
 .literature-review__report-title {
-    font-size: 0.9375rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white !important;
 }
 
 .literature-review__report-subtitle {
-    font-size: 0.75rem;
-    opacity: 0.9;
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .literature-review__report-arrow {
     flex-shrink: 0;
+    color: white !important;
 }
 
 /* Section titles */

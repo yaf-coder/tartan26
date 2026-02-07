@@ -84,7 +84,7 @@ export function LiteratureReview({ sources, summary, literatureReview }: Literat
                         </svg>
                         <div className="literature-review__report-text">
                             <span className="literature-review__report-title">Comprehensive Research Report</span>
-                            <span className="literature-review__report-subtitle">Download formatted PDF</span>
+                            <span className="literature-review__report-subtitle">Download PDF</span>
                         </div>
                         <svg className="literature-review__report-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
