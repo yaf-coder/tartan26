@@ -1,42 +1,348 @@
-#root {
-  max-width: 1280px;
+/**
+ * =============================================================================
+ * APP STYLES - Minimalist Product Design
+ * =============================================================================
+ */
+
+/* Main app container */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-background);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Premium background pattern */
+.app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 600px;
+  background-image: var(--grid-pattern);
+  background-size: var(--grid-size) var(--grid-size);
+  opacity: 0.4;
+  mask-image: linear-gradient(to bottom, black, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Decorative background orbs */
+.app__bg-orb {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--color-accent-subtle) 0%, transparent 70%);
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+.app__bg-orb--1 {
+  top: -200px;
+  right: -100px;
+}
+
+.app__bg-orb--2 {
+  top: 100px;
+  left: -200px;
+}
+
+/* =============================================================================
+   HERO SECTION - Product-focused header
+   ============================================================================= */
+
+.app__hero {
+  padding: var(--space-10) var(--space-6) var(--space-2);
+  position: relative;
+  z-index: 1;
+  animation: hero-entrance var(--transition-slow) forwards;
+}
+
+@keyframes hero-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app__hero-content {
+  max-width: 900px;
   margin: 0 auto;
-  padding: 2rem;
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.app__tagline {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  padding: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-background-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+
+  /* Tagline Pop Effect */
+  background: linear-gradient(135deg, var(--color-highlight-start), var(--color-highlight-end));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: relative;
 }
 
-@keyframes logo-spin {
+.app__tagline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--color-highlight-end), transparent);
+}
+
+.app__title {
+  font-size: 4rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-4);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-style: italic;
+}
+
+.app__subtitle-brand {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  /* Gradient effect like the tagline */
+  background: linear-gradient(135deg, var(--color-highlight-start), var(--color-highlight-end));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* =============================================================================
+   MAIN CONTENT AREA
+   ============================================================================= */
+
+.app__main {
+  flex: 1;
+  padding: var(--space-2) var(--space-6);
+  position: relative;
+  z-index: 1;
+}
+
+.app__container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Content area */
+.app__content {
+  min-width: 0;
+}
+
+/* =============================================================================
+   INPUT SECTION (idle state)
+   ============================================================================= */
+
+.app__input-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  animation: content-entrance var(--transition-normal) 200ms forwards;
+  opacity: 0;
+}
+
+/* Trust badges in input section */
+.app__input-section .app__trust-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-5) var(--space-8);
+  background: linear-gradient(135deg, var(--color-background-alt), var(--color-background));
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.app__trust-badge {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  position: relative;
+}
+
+.app__trust-separator {
+  color: var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+@keyframes content-entrance {
   from {
-    transform: rotate(0deg);
+    opacity: 0;
+    transform: translateY(10px);
   }
+
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+/* =============================================================================
+   LOADING SECTION
+   ============================================================================= */
+
+.app__loading-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* =============================================================================
+   RESULTS SECTION
+   ============================================================================= */
+
+.app__results-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* =============================================================================
+   QUERY DISPLAY (shown during loading and results)
+   ============================================================================= */
+
+.app__query-display {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background-color: var(--color-background-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app__query-display--complete {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app__query-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.app__query-text {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.app__new-search-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-text-primary);
+  color: white;
+  border-radius: var(--radius-md);
+  margin-left: auto;
+  transition: var(--transition-fast);
+}
+
+.app__new-search-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* =============================================================================
+   ERROR SECTION
+   ============================================================================= */
+
+.app__error-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.app__error-message {
+  text-align: center;
+  padding: var(--space-8);
+  background-color: var(--color-background-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+/* =============================================================================
+   FOOTER
+   ============================================================================= */
+
+.app__footer {
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  border-top: 1px solid var(--color-border);
+  position: relative;
+  z-index: 1;
+}
+
+.app__footer p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: 0;
+}
+
+/* =============================================================================
+   RESPONSIVE DESIGN refinement
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .app__hero {
+    padding: var(--space-12) var(--space-4) var(--space-8);
   }
-}
 
-.card {
-  padding: 2em;
-}
+  .app__title {
+    font-size: 2.5rem;
+  }
 
-.read-the-docs {
-  color: #888;
+  .app__subtitle-brand {
+    font-size: var(--font-size-base);
+    letter-spacing: 0.1em;
+  }
+
+  .app__input-section .app__trust-badges {
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .app__trust-separator {
+    display: none;
+  }
+
+  .app__main {
+    padding: var(--space-6) var(--space-4);
+  }
 }

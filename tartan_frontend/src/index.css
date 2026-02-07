@@ -1,68 +1,436 @@
+/**
+ * =============================================================================
+ * INDEX.CSS - Global Styles and Design System
+ * =============================================================================
+ * 
+ * This file contains:
+ * 1. CSS Custom Properties (variables) - colors, spacing, typography
+ * 2. CSS Reset - normalize browser defaults
+ * 3. Base element styles
+ * 4. Utility classes
+ * 
+ * DESIGN PHILOSOPHY:
+ * - Light theme for trust and professionalism
+ * - Lots of whitespace for a clean, premium feel
+ * - Muted colors with strategic accent colors
+ * - Crisp typography with good readability
+ * =============================================================================
+ */
+
+/* =============================================================================
+   1. CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   These variables make it easy to maintain consistent styling throughout the app
+   ============================================================================= */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* -- Colors: Minimal Grayscale Palette -- */
+  /* Using only grays for a clean, professional look */
+  --color-primary: #111827;
+  /* Near-black - used for buttons */
+  --color-primary-light: #374151;
+  /* Dark gray for hover states */
+  --color-primary-dark: #030712;
+  /* Almost black for active states */
+  --color-primary-subtle: #f9fafb;
+  /* Very light gray for backgrounds */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* -- Colors: Neutral Palette (grays) -- */
+  --color-text-primary: #111827;
+  /* Near-black for main text */
+  --color-text-secondary: #4b5563;
+  /* Medium gray for secondary text */
+  --color-text-muted: #9ca3af;
+  /* Light gray for hints/placeholders */
+  --color-border: #e5e7eb;
+  /* Light gray for borders */
+  --color-border-light: #f3f4f6;
+  /* Very light gray for subtle borders */
+  --color-background: #ffffff;
+  /* White background */
+  --color-background-alt: #f9fafb;
+  /* Slightly off-white for sections */
+  --color-background-dark: #f3f4f6;
+  /* Gray background for contrast */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  /* -- Colors: Status (kept subtle) -- */
+  --color-success: #4b5563;
+  /* Using gray instead of green */
+  --color-success-light: #6b7280;
+  --color-success-subtle: #f9fafb;
+  --color-error: #991b1b;
+  /* Dark red for errors */
+  --color-error-subtle: #fef2f2;
+
+  /* -- Premium Highlights & Special Effects -- */
+  --color-highlight-start: #111827;
+  --color-highlight-end: #6b7280;
+  --color-accent-subtle: rgba(17, 24, 39, 0.03);
+
+  /* -- Background Patterns -- */
+  --grid-pattern: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+  --grid-size: 24px;
+
+  /* -- Typography -- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-xs: 0.75rem;
+  /* 12px */
+  --font-size-sm: 0.875rem;
+  /* 14px */
+  --font-size-base: 1rem;
+  /* 16px */
+  --font-size-lg: 1.125rem;
+  /* 18px */
+  --font-size-xl: 1.25rem;
+  /* 20px */
+  --font-size-2xl: 1.5rem;
+  /* 24px */
+  --font-size-3xl: 1.875rem;
+  /* 30px */
+  --font-size-4xl: 2.25rem;
+  /* 36px */
+
+  /* -- Font Weights -- */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* -- Spacing Scale (based on 4px increments) -- */
+  --space-1: 0.25rem;
+  /* 4px */
+  --space-2: 0.5rem;
+  /* 8px */
+  --space-3: 0.75rem;
+  /* 12px */
+  --space-4: 1rem;
+  /* 16px */
+  --space-5: 1.25rem;
+  /* 20px */
+  --space-6: 1.5rem;
+  /* 24px */
+  --space-8: 2rem;
+  /* 32px */
+  --space-10: 2.5rem;
+  /* 40px */
+  --space-12: 3rem;
+  /* 48px */
+  --space-16: 4rem;
+  /* 64px */
+
+  /* -- Border Radius -- */
+  --radius-sm: 0.25rem;
+  /* 4px */
+  --radius-md: 0.5rem;
+  /* 8px */
+  --radius-lg: 0.75rem;
+  /* 12px */
+  --radius-xl: 1rem;
+  /* 16px */
+  --radius-full: 9999px;
+  /* Fully rounded (pills) */
+
+  /* -- Shadows (subtle for premium feel) -- */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* -- Transitions -- */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* -- Layout -- */
+  --sidebar-width: 320px;
+  --max-content-width: 1400px;
+}
+
+/* =============================================================================
+   2. CSS RESET
+   Normalize browser defaults for consistent styling
+   ============================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
   min-height: 100vh;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+/* =============================================================================
+   3. BASE ELEMENT STYLES
+   Default styling for common HTML elements
+   ============================================================================= */
+
+/* -- Headings -- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: var(--font-size-4xl);
 }
 
+h2 {
+  font-size: var(--font-size-3xl);
+}
+
+h3 {
+  font-size: var(--font-size-2xl);
+}
+
+h4 {
+  font-size: var(--font-size-xl);
+}
+
+h5 {
+  font-size: var(--font-size-lg);
+}
+
+h6 {
+  font-size: var(--font-size-base);
+}
+
+/* -- Paragraphs and Text -- */
+p {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+small {
+  font-size: var(--font-size-sm);
+}
+
+/* -- Links -- */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+}
+
+/* -- Buttons -- */
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  transition: all var(--transition-fast);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* -- Form Elements -- */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* -- Lists -- */
+ul,
+ol {
+  padding-left: var(--space-6);
+}
+
+li {
+  margin-bottom: var(--space-2);
+}
+
+/* =============================================================================
+   4. UTILITY CLASSES
+   Reusable classes for common patterns
+   ============================================================================= */
+
+/* -- Text Utilities -- */
+.text-primary {
+  color: var(--color-primary);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-error {
+  color: var(--color-error);
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-sm {
+  font-size: var(--font-size-sm);
+}
+
+.text-xs {
+  font-size: var(--font-size-xs);
+}
+
+.font-medium {
+  font-weight: var(--font-weight-medium);
+}
+
+.font-semibold {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* -- Spacing Utilities -- */
+.mt-2 {
+  margin-top: var(--space-2);
+}
+
+.mt-4 {
+  margin-top: var(--space-4);
+}
+
+.mb-2 {
+  margin-bottom: var(--space-2);
+}
+
+.mb-4 {
+  margin-bottom: var(--space-4);
+}
+
+/* -- Flex Utilities -- */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-4 {
+  gap: var(--space-4);
+}
+
+/* -- Animation Keyframes -- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
-  a:hover {
-    color: #747bff;
+
+  to {
+    opacity: 1;
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-normal) ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
