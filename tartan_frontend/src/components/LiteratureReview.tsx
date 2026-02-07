@@ -1,83 +1,143 @@
-/**
- * =============================================================================
- * LITERATURE REVIEW COMPONENT
- * =============================================================================
- * 
- * Displays the complete literature review results with:
- * - A summary section at the top
- * - Scrollable list of SourceCards (20 sources)
- * 
- * This is the main results component shown after analysis is complete.
- * 
- * PROPS:
- * - sources: array of Source objects from mockData
- * - summary: the summary text for the review
- * =============================================================================
- */
+import { useEffect, useMemo, useState } from "react";
+import "./LiteratureReview.css";
+import type { CitationsJson, JobRecord } from "../types";
+import { artifactDownloadUrl, fetchCitationsJson } from "../api";
+import SourceCard from "./SourceCard";
 
-import type { Source } from '../types';
-import { SourceCard } from './SourceCard';
-import './LiteratureReview.css';
+type Props = {
+  job: JobRecord | null;
+};
 
-// -----------------------------------------------------------------------------
-// TYPE DEFINITIONS
-// -----------------------------------------------------------------------------
+export default function LiteratureReview({ job }: Props) {
+  const [citations, setCitations] = useState<CitationsJson | null>(null);
+  const [citErr, setCitErr] = useState<string | null>(null);
+  const [citLoading, setCitLoading] = useState(false);
 
-interface LiteratureReviewProps {
-    /** Array of sources to display */
-    sources: Source[];
-    /** Summary paragraph for the review */
-    summary: string;
-}
+  const succeeded = job?.status === "succeeded";
+  const jobId = job?.job_id;
 
-// -----------------------------------------------------------------------------
-// COMPONENT
-// -----------------------------------------------------------------------------
+  const downloads = useMemo(() => {
+    if (!jobId) return [];
+    return [
+      { name: "paper.pdf", label: "Paper (PDF)" },
+      { name: "paper.md", label: "Paper (Markdown)" },
+      { name: "citations.json", label: "Citations (JSON)" },
+      { name: "rq_quotes.csv", label: "RQ Quotes (CSV)" },
+      { name: "all_quotes.csv", label: "All Quotes (CSV)" },
+      { name: "all_quotes_with_ideas.csv", label: "Quotes + Ideas (CSV)" },
+    ];
+  }, [jobId]);
 
-export function LiteratureReview({ sources, summary }: LiteratureReviewProps) {
-    // Calculate some stats for the header
-    const totalQuotes = sources.reduce((acc, s) => acc + s.quotes.length, 0);
-    const totalFindings = sources.reduce((acc, s) => acc + s.keyFindings.length, 0);
+  useEffect(() => {
+    setCitations(null);
+    setCitErr(null);
+  }, [jobId]);
 
+  async function loadCitations() {
+    if (!jobId) return;
+    setCitLoading(true);
+    setCitErr(null);
+    try {
+      const obj = (await fetchCitationsJson(jobId)) as CitationsJson;
+      setCitations(obj);
+    } catch (e: any) {
+      setCitErr(e?.message ?? String(e));
+    } finally {
+      setCitLoading(false);
+    }
+  }
+
+  if (!job) {
     return (
-        <div className="literature-review">
-            {/* Header */}
-            <header className="literature-review__header">
-                <h2 className="literature-review__title">Literature Review</h2>
-
-                {/* Stats badges */}
-                <div className="literature-review__stats">
-                    <span className="literature-review__stat">
-                        <strong>{sources.length}</strong> sources
-                    </span>
-                    <span className="literature-review__stat">
-                        <strong>{totalQuotes}</strong> quotes
-                    </span>
-                    <span className="literature-review__stat">
-                        <strong>{totalFindings}</strong> findings
-                    </span>
-                </div>
-            </header>
-
-            {/* Summary section */}
-            <section className="literature-review__summary">
-                <h3 className="literature-review__section-title">Executive Summary</h3>
-                <p className="literature-review__summary-text">{summary}</p>
-            </section>
-
-            {/* Sources section */}
-            <section className="literature-review__sources">
-                <h3 className="literature-review__section-title">
-                    Sources ({sources.length})
-                </h3>
-
-                {/* Scrollable list of source cards */}
-                <div className="literature-review__source-list">
-                    {sources.map((source) => (
-                        <SourceCard key={source.id} source={source} />
-                    ))}
-                </div>
-            </section>
+      <div className="literatureReview">
+        <h2>Results</h2>
+        <div className="literatureReview__empty">
+          Submit a research question to generate a paper.
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="literatureReview">
+      <h2>Results</h2>
+
+      <div className="literatureReview__meta">
+        <div>
+          <b>Job:</b> {job.job_id}
+        </div>
+        <div>
+          <b>Status:</b> {job.status}
+        </div>
+        <div>
+          <b>Stage:</b> {job.stage}
+        </div>
+      </div>
+
+      {!succeeded && (
+        <div className="literatureReview__empty">
+          Outputs will appear here when the job finishes.
+        </div>
+      )}
+
+      {succeeded && jobId && (
+        <>
+          <div className="literatureReview__downloads">
+            <h3>Downloads</h3>
+            <div className="literatureReview__downloadGrid">
+              {downloads.map((d) => (
+                <a
+                  key={d.name}
+                  className="literatureReview__download"
+                  href={artifactDownloadUrl(jobId, d.name)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {d.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div className="literatureReview__sources">
+            <div className="literatureReview__sourcesHeader">
+              <h3>Sources</h3>
+              <button
+                className="literatureReview__button"
+                onClick={loadCitations}
+                disabled={citLoading}
+              >
+                {citLoading ? "Loading…" : citations ? "Refresh" : "Load"}
+              </button>
+            </div>
+
+            {citErr && (
+              <div className="literatureReview__error">
+                Failed to load citations.json: {citErr}
+              </div>
+            )}
+
+            {!citations && !citErr && (
+              <div className="literatureReview__empty">
+                Click “Load” to display citations parsed from downloaded PDFs.
+              </div>
+            )}
+
+            {citations && (
+              <div className="literatureReview__sourceList">
+                {Object.entries(citations).map(([filename, v]) => (
+                  <SourceCard
+                    key={filename}
+                    filename={filename}
+                    reference={v.reference}
+                    footnote={v.footnote}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

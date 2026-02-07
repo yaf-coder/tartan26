@@ -1,246 +1,150 @@
-/**
- * =============================================================================
- * APP.TSX - Main Application Component
- * =============================================================================
- * 
- * This is the root component that orchestrates the entire application.
- * 
- * STRUCTURE:
- * - Header with product title
- * - Two-column layout:
- *   - Main area: Chat input, upload zone, loading state, or results
- *   - Sidebar: Status indicators
- * 
- * STATE MACHINE:
- * - idle: Initial state, showing input forms
- * - loading: Processing query, showing progress stepper
- * - results: Showing literature review results
- * - error: Something went wrong (with retry option)
- * =============================================================================
- */
+import { useEffect, useMemo, useRef, useState } from "react";
+import "./App.css";
 
-import { useState, useCallback } from 'react';
+import type { JobRecord } from "./types";
+import { getJob, startGenerate } from "./api";
 
-// Types
-import type { AppState, LoadingStep, UploadedFile } from './types';
-
-// Components
 import {
   ChatInput,
-  UploadDropzone,
-  ProgressStepper,
   LiteratureReview,
-} from './components';
+  ProgressStepper,
+  SupportersFeed,
+  UploadDropzone,
+  ValidationSidebar,
+} from "./components";
 
-// Styles
-import './App.css';
+// IMPORTANT: this matches your UploadDropzone's internal type
+// (If you moved UploadedFile to types.ts, import it instead.)
+type UploadedFile = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
 
-// Mock Data
-import { generateMockSources, generateMockSummary } from './mockData';
+const POLL_MS = 1500;
 
-// -----------------------------------------------------------------------------
-// CONSTANTS
-// -----------------------------------------------------------------------------
+export default function App() {
+  const [rq, setRq] = useState<string>("");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<JobRecord | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-/** Duration for each loading step (in milliseconds) */
-const STEP_DURATION = 1500;
-
-/** All loading steps in order */
-const LOADING_STEPS: LoadingStep[] = [
-  'finding-sources',
-  'extracting-quotes',
-  'cross-checking',
-  'compiling',
-];
-
-// -----------------------------------------------------------------------------
-// MAIN APP COMPONENT
-// -----------------------------------------------------------------------------
-
-function App() {
-  // ---------------------------------------------------------------------------
-  // STATE
-  // ---------------------------------------------------------------------------
-
-  /** Current app state: idle, loading, results, or error */
-  const [appState, setAppState] = useState<AppState>('idle');
-
-  /** The user's research query */
-  const [query, setQuery] = useState('');
-
-  /** Uploaded files */
+  // UploadDropzone state (even if v1 doesn’t upload to backend yet)
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
-  /** Current loading step (when in loading state) */
-  const [currentStep, setCurrentStep] = useState<LoadingStep>('finding-sources');
+  const pollingRef = useRef<number | null>(null);
 
-  // ---------------------------------------------------------------------------
-  // HANDLERS
-  // ---------------------------------------------------------------------------
+  const isBusy = useMemo(() => {
+    return job?.status === "queued" || job?.status === "running";
+  }, [job?.status]);
 
-  /**
-   * Handle query submission
-   * This simulates the research process with loading states
-   */
-  const handleSubmit = useCallback((submittedQuery: string) => {
-    // Save the query
-    setQuery(submittedQuery);
+  async function handleSubmit(nextRq: string) {
+    setErr(null);
+    setRq(nextRq);
 
-    // Start loading
-    setAppState('loading');
-    setCurrentStep('finding-sources');
+    // Optional: clear uploaded files on new run
+    // setFiles([]);
 
-    // Simulate each loading step
-    let stepIndex = 0;
+    // Reset visible job state immediately
+    setJob(null);
+    setJobId(null);
 
-    const advanceStep = () => {
-      stepIndex++;
+    try {
+      // Minimal payload: just rq.
+      const res = await startGenerate({ rq: nextRq });
+      setJobId(res.job_id);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    }
+  }
 
-      if (stepIndex < LOADING_STEPS.length) {
-        // Move to next step
-        setCurrentStep(LOADING_STEPS[stepIndex]);
-        setTimeout(advanceStep, STEP_DURATION);
-      } else {
-        // All steps complete, show results
-        setAppState('results');
+  // Poll job status
+  useEffect(() => {
+    let cancelled = false;
+
+    async function tick(id: string) {
+      try {
+        const j = await getJob(id);
+        if (!cancelled) setJob(j);
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message ?? String(e));
+      }
+    }
+
+    // clear old
+    if (pollingRef.current) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    if (!jobId) return;
+
+    // immediate fetch
+    tick(jobId);
+
+    // interval
+    pollingRef.current = window.setInterval(() => tick(jobId), POLL_MS);
+
+    return () => {
+      cancelled = true;
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
     };
+  }, [jobId]);
 
-    // Start the step progression
-    setTimeout(advanceStep, STEP_DURATION);
-  }, []);
-
-  /**
-   * Reset to idle state (start over)
-   */
-  const handleReset = useCallback(() => {
-    setAppState('idle');
-    setQuery('');
-    setFiles([]);
-    setCurrentStep('finding-sources');
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // RENDER HELPERS
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Render the main content area based on current state
-   */
-  const renderMainContent = () => {
-    switch (appState) {
-      case 'idle':
-        return (
-          <div className="app__input-section">
-            {/* Trust badges */}
-            <div className="app__trust-badges">
-              <span className="app__trust-badge">Every claim is cited</span>
-              <span className="app__trust-separator">•</span>
-              <span className="app__trust-badge">Every quote is traceable</span>
-              <span className="app__trust-separator">•</span>
-              <span className="app__trust-badge">Every conclusion is verifiable</span>
-            </div>
-
-            {/* Chat input */}
-            <ChatInput onSubmit={handleSubmit} disabled={false} />
-
-            {/* File upload */}
-            <UploadDropzone
-              files={files}
-              onFilesChange={setFiles}
-              disabled={false}
-            />
-          </div>
-        );
-
-      case 'loading':
-        return (
-          <div className="app__loading-section">
-            {/* Show the query being processed */}
-            <div className="app__query-display">
-              <span className="app__query-label">Researching:</span>
-              <p className="app__query-text">"{query}"</p>
-            </div>
-
-            {/* Progress stepper */}
-            <ProgressStepper currentStep={currentStep} />
-          </div>
-        );
-
-      case 'results':
-        return (
-          <div className="app__results-section">
-            {/* Show the query that was processed */}
-            <div className="app__query-display app__query-display--complete">
-              <span className="app__query-label">Research completed for:</span>
-              <p className="app__query-text">"{query}"</p>
-              <button
-                className="app__new-search-btn"
-                onClick={handleReset}
-              >
-                New Search
-              </button>
-            </div>
-
-            {/* Literature review results - empty until backend is connected */}
-            <LiteratureReview
-              sources={[]}
-              summary="Results will appear here when connected to the backend."
-            />
-          </div>
-        );
-
-      case 'error':
-        return (
-          <div className="app__error-section">
-            <div className="app__error-message">
-              <h3>Something went wrong</h3>
-              <p>We couldn't complete your research. Please try again.</p>
-              <button onClick={handleReset}>Try Again</button>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
+  // Stop polling when terminal
+  useEffect(() => {
+    if (!jobId || !job) return;
+    if (job.status === "succeeded" || job.status === "failed") {
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     }
-  };
-
-  // ---------------------------------------------------------------------------
-  // RENDER
-  // ---------------------------------------------------------------------------
+  }, [jobId, job]);
 
   return (
     <div className="app">
-      {/* Decorative background elements */}
-      <div className="app__bg-orb app__bg-orb--1" aria-hidden="true" />
-      <div className="app__bg-orb app__bg-orb--2" aria-hidden="true" />
-
-      {/* Header / Hero */}
-      <header className="app__hero">
-        <div className="app__hero-content">
-          <p className="app__tagline">Hallucination-proof research</p>
-          <h1 className="app__title">Veritas</h1>
-          <p className="app__subtitle-brand">the truth agent</p>
-        </div>
+      <header className="app__header">
+        <div className="app__brand">Tartan</div>
+        <div className="app__sub">Research question → sources → quotes → paper</div>
       </header>
 
-      {/* Main content area */}
       <main className="app__main">
-        <div className="app__container">
-          {/* Main content - full width now */}
-          <div className="app__content">
-            {renderMainContent()}
+        <section className="app__left">
+          <ChatInput disabled={isBusy} defaultValue={rq} onSubmit={handleSubmit} />
+
+          {err && <div className="app__error">Error: {err}</div>}
+
+          <div className="app__progress">
+            <ProgressStepper
+              status={job?.status ?? (jobId ? "running" : "idle")}
+              stage={job?.stage ?? (jobId ? "queued" : "queued")}
+              progress={job?.progress ?? (jobId ? 1 : 0)}
+            />
           </div>
-        </div>
+
+          {/* ✅ FIX: pass required props */}
+          <UploadDropzone files={files} onFilesChange={setFiles} disabled={isBusy} />
+
+          <SupportersFeed job={job} />
+        </section>
+
+        <section className="app__right">
+          <LiteratureReview job={job} />
+        </section>
+
+        <aside className="app__sidebar">
+          <ValidationSidebar job={job} />
+        </aside>
       </main>
 
-      {/* Footer */}
       <footer className="app__footer">
-        <p>Built with transparency in mind.</p>
+        {isBusy ? <span>Working… keep this tab open.</span> : <span>Ready.</span>}
       </footer>
     </div>
   );
 }
-
-export default App;

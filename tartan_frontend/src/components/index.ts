@@ -1,20 +1,7 @@
-/**
- * =============================================================================
- * COMPONENTS INDEX
- * =============================================================================
- * 
- * This file exports all components from a single location.
- * 
- * USAGE:
- * Instead of: import { ChatInput } from './components/ChatInput';
- * You can do:  import { ChatInput } from './components';
- * 
- * This makes imports cleaner and easier to manage.
- * =============================================================================
- */
-
-export { ChatInput } from './ChatInput';
-export { UploadDropzone } from './UploadDropzone';
-export { ProgressStepper } from './ProgressStepper';
-export { SourceCard } from './SourceCard';
-export { LiteratureReview } from './LiteratureReview';
+export { default as ChatInput } from "./ChatInput";
+export { default as LiteratureReview } from "./LiteratureReview";
+export { default as ProgressStepper } from "./ProgressStepper";
+export { default as SourceCard } from "./SourceCard";
+export { default as SupportersFeed } from "./SupportersFeed";
+export { UploadDropzone } from "./UploadDropzone";
+export { default as ValidationSidebar } from "./ValidationSidebar";
