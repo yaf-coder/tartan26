@@ -31,6 +31,22 @@ app.add_middleware(
 )
 
 
+def user_query_to_arxiv_search(user_query: str) -> str:
+    """Convert natural-language question to an arXiv-appropriate search query (keywords/phrase)."""
+    py = sys.executable
+    result = subprocess.run(
+        [py, "query_to_arxiv.py", "--query", user_query],
+        cwd=str(BACKEND),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ},
+    )
+    if result.returncode == 0 and result.stdout and result.stdout.strip():
+        return result.stdout.strip()[:500]
+    return user_query.strip()[:500]
+
+
 def fetch_papers_from_arxiv(papers_dir: str, query: str, max_results: int = 5) -> None:
     """Search arXiv for the query and download PDFs into papers_dir."""
     path = Path(papers_dir)
@@ -186,8 +202,9 @@ async def research(
 
         pdfs = list(papers_dir.glob("*.pdf"))
         if not pdfs:
-            # No files: search arXiv and download papers
-            fetch_papers_from_arxiv(str(papers_dir), query.strip(), max_results=5)
+            # No files: convert question to arXiv search query, then search and download papers
+            arxiv_query = user_query_to_arxiv_search(query.strip())
+            fetch_papers_from_arxiv(str(papers_dir), arxiv_query, max_results=5)
             pdfs = list(papers_dir.glob("*.pdf"))
             if not pdfs:
                 raise HTTPException(
