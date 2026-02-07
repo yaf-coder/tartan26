@@ -1,3 +1,8 @@
+import random
+
+import httpx
+from dedalus_labs import APIConnectionError, APITimeoutError, RateLimitError
+
 import argparse
 import asyncio
 import csv
@@ -49,8 +54,47 @@ async def chat(
     user: str,
     *,
     timeout_s: float = 180.0,
-    max_retries: int = 6,
+    max_retries: int = 8,
 ) -> str:
+    """
+    Robust chat call with retries + exponential backoff.
+    Handles Dedalus APIConnectionError + transient httpx protocol disconnects.
+    """
+    last_err: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                timeout=timeout_s,
+            )
+            try:
+                return resp.choices[0].message.content
+            except Exception:
+                return str(resp)
+
+        except (APITimeoutError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError) as e:
+            last_err = e
+        except (APIConnectionError, RateLimitError) as e:
+            last_err = e
+        except Exception as e:
+            # keep a couple retries even for generic exceptions
+            last_err = e
+
+        # backoff with jitter; cap at 30s
+        sleep_s = min((2 ** attempt) + random.random(), 30.0)
+        print(
+            f"⚠️  chat() attempt {attempt}/{max_retries} failed "
+            f"({type(last_err).__name__}: {last_err}). Retrying in {sleep_s:.1f}s..."
+        )
+        await asyncio.sleep(sleep_s)
+
+    raise RuntimeError(f"chat() failed after {max_retries} retries: {type(last_err).__name__}: {last_err}")
+
     """
     Robust chat call with retries + exponential backoff.
     timeout_s applies to the underlying HTTP request.
