@@ -22,7 +22,7 @@
 import { useState, useCallback } from 'react';
 
 // Types
-import type { AppState, LoadingStep, UploadedFile } from './types';
+import type { AppState, LoadingStep, Source, UploadedFile } from './types';
 
 // Components
 import {
@@ -32,11 +32,11 @@ import {
   LiteratureReview,
 } from './components';
 
+// API
+import { submitResearch, getPaperDownloadUrl } from './api';
+
 // Styles
 import './App.css';
-
-// Mock Data
-import { generateMockSources, generateMockSummary } from './mockData';
 
 // -----------------------------------------------------------------------------
 // CONSTANTS
@@ -74,41 +74,66 @@ function App() {
   /** Current loading step (when in loading state) */
   const [currentStep, setCurrentStep] = useState<LoadingStep>('finding-sources');
 
+  /** Results: sources and summary from the API */
+  const [sources, setSources] = useState<Source[]>([]);
+  const [summary, setSummary] = useState('');
+
+  /** Error message when request fails */
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  /** Names of source PDF files from the last research (for popup + download) */
+  const [sourceFiles, setSourceFiles] = useState<string[]>([]);
+
+  /** Whether to show the source files popup */
+  const [showSourceFilesPopup, setShowSourceFilesPopup] = useState(false);
+
   // ---------------------------------------------------------------------------
   // HANDLERS
   // ---------------------------------------------------------------------------
 
   /**
-   * Handle query submission
-   * This simulates the research process with loading states
+   * Handle query submission: call API with query; optional PDFs are sent as sources.
+   * A question alone starts research (backend finds papers); any uploaded files are used as sources.
    */
-  const handleSubmit = useCallback((submittedQuery: string) => {
-    // Save the query
+  const handleSubmit = useCallback(async (submittedQuery: string) => {
     setQuery(submittedQuery);
+    setErrorMessage(null);
 
-    // Start loading
+    const pdfFiles = files
+      .filter((f): f is UploadedFile & { file: File } => !!f.file && f.name.toLowerCase().endsWith('.pdf'))
+      .map((f) => f.file);
+
     setAppState('loading');
     setCurrentStep('finding-sources');
 
-    // Simulate each loading step
+    // Animate through steps while request is in flight
     let stepIndex = 0;
-
-    const advanceStep = () => {
+    const stepInterval = setInterval(() => {
       stepIndex++;
-
       if (stepIndex < LOADING_STEPS.length) {
-        // Move to next step
         setCurrentStep(LOADING_STEPS[stepIndex]);
-        setTimeout(advanceStep, STEP_DURATION);
       } else {
-        // All steps complete, show results
-        setAppState('results');
+        clearInterval(stepInterval);
       }
-    };
+    }, STEP_DURATION);
 
-    // Start the step progression
-    setTimeout(advanceStep, STEP_DURATION);
-  }, []);
+    try {
+      const result = await submitResearch(submittedQuery.trim(), pdfFiles);
+      clearInterval(stepInterval);
+      setCurrentStep('compiling');
+      setSources(result.sources);
+      setSummary(result.summary);
+      setSourceFiles(result.source_files ?? []);
+      setAppState('results');
+      if ((result.source_files?.length ?? 0) > 0) {
+        setShowSourceFilesPopup(true);
+      }
+    } catch (err) {
+      clearInterval(stepInterval);
+      setErrorMessage(err instanceof Error ? err.message : 'Research request failed.');
+      setAppState('error');
+    }
+  }, [files]);
 
   /**
    * Reset to idle state (start over)
@@ -117,6 +142,11 @@ function App() {
     setAppState('idle');
     setQuery('');
     setFiles([]);
+    setSources([]);
+    setSummary('');
+    setSourceFiles([]);
+    setShowSourceFilesPopup(false);
+    setErrorMessage(null);
     setCurrentStep('finding-sources');
   }, []);
 
@@ -182,11 +212,42 @@ function App() {
               </button>
             </div>
 
-            {/* Literature review results - empty until backend is connected */}
-            <LiteratureReview
-              sources={[]}
-              summary="Results will appear here when connected to the backend."
-            />
+            <LiteratureReview sources={sources} summary={summary} />
+
+            {/* Popup: source PDF files (names + download links) */}
+            {showSourceFilesPopup && sourceFiles.length > 0 && (
+              <div className="app__source-files-overlay" onClick={() => setShowSourceFilesPopup(false)}>
+                <div className="app__source-files-popup" onClick={(e) => e.stopPropagation()}>
+                  <div className="app__source-files-header">
+                    <h3>Source files ({sourceFiles.length})</h3>
+                    <button
+                      type="button"
+                      className="app__source-files-close"
+                      onClick={() => setShowSourceFilesPopup(false)}
+                      aria-label="Close"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <ul className="app__source-files-list">
+                    {sourceFiles.map((name) => (
+                      <li key={name} className="app__source-files-item">
+                        <span className="app__source-files-name">{name}</span>
+                        <a
+                          href={getPaperDownloadUrl(name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={name}
+                          className="app__source-files-download"
+                        >
+                          Download
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -195,7 +256,7 @@ function App() {
           <div className="app__error-section">
             <div className="app__error-message">
               <h3>Something went wrong</h3>
-              <p>We couldn't complete your research. Please try again.</p>
+              <p>{errorMessage ?? "We couldn't complete your research. Please try again."}</p>
               <button onClick={handleReset}>Try Again</button>
             </div>
           </div>

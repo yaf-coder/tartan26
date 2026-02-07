@@ -37,18 +37,18 @@ _seen_ids: set[str] = set()
 
 MODEL = "anthropic/claude-opus-4-5"
 
-# ── Resolve the arxiv-mcp-server command ─────────────────────────────────────
-# Prefer the installed entry-point; fall back to running as a Python module.
-_arxiv_cmd = shutil.which("arxiv-mcp-server")
-if _arxiv_cmd:
-    ARXIV_SERVER_PARAMS = StdioServerParameters(
-        command=_arxiv_cmd,
-        args=["--storage-path", PAPERS_DIR],
-    )
-else:
-    ARXIV_SERVER_PARAMS = StdioServerParameters(
+
+def _server_params(storage_path: str) -> StdioServerParameters:
+    """Build MCP server params for a given storage path."""
+    arxiv_cmd = shutil.which("arxiv-mcp-server")
+    if arxiv_cmd:
+        return StdioServerParameters(
+            command=arxiv_cmd,
+            args=["--storage-path", storage_path],
+        )
+    return StdioServerParameters(
         command=sys.executable,
-        args=["-m", "arxiv_mcp_server", "--storage-path", PAPERS_DIR],
+        args=["-m", "arxiv_mcp_server", "--storage-path", storage_path],
     )
 
 
@@ -251,13 +251,17 @@ async def main(
 # ── CLI entry point ──────────────────────────────────────────────────────────
 
 
-async def _run(prompt_text: str, depth: int) -> None:
+async def _run(prompt_text: str, depth: int, storage_path: str | None = None) -> None:
     """Spawn the arXiv MCP server, open a session, and kick off main()."""
-    print(f"🚀 Starting arXiv MCP server …")
-    print(f"   Command: {ARXIV_SERVER_PARAMS.command} {' '.join(ARXIV_SERVER_PARAMS.args)}")
-    print(f"   Storage: {PAPERS_DIR}\n")
+    papers_dir = storage_path or PAPERS_DIR
+    os.makedirs(papers_dir, exist_ok=True)
+    server_params = _server_params(papers_dir)
 
-    async with stdio_client(ARXIV_SERVER_PARAMS) as (read, write):
+    print(f"🚀 Starting arXiv MCP server …")
+    print(f"   Command: {server_params.command} {' '.join(server_params.args)}")
+    print(f"   Storage: {papers_dir}\n")
+
+    async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -284,6 +288,12 @@ def cli():
         default=1,
         help="Recursion depth (0 = do nothing). Default: 1",
     )
+    parser.add_argument(
+        "--storage-path",
+        type=str,
+        default=None,
+        help="Directory to store downloaded papers (default: ./papers).",
+    )
     args = parser.parse_args()
 
     if args.prompt_file:
@@ -295,7 +305,7 @@ def cli():
     if args.depth < 0:
         raise SystemExit("depth must be a non-negative integer.")
 
-    asyncio.run(_run(prompt_text, args.depth))
+    asyncio.run(_run(prompt_text, args.depth, storage_path=args.storage_path))
 
 
 if __name__ == "__main__":

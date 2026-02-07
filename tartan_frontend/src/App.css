@@ -315,6 +315,98 @@
 }
 
 /* =============================================================================
+   SOURCE FILES POPUP
+   ============================================================================= */
+
+.app__source-files-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--space-4);
+}
+
+.app__source-files-popup {
+  background: var(--color-background);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 480px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__source-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app__source-files-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.app__source-files-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-2);
+}
+
+.app__source-files-close:hover {
+  color: var(--color-text);
+}
+
+.app__source-files-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.app__source-files-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app__source-files-item:last-child {
+  border-bottom: none;
+}
+
+.app__source-files-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.app__source-files-download {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.app__source-files-download:hover {
+  text-decoration: underline;
+}
+
+/* =============================================================================
    RESPONSIVE DESIGN refinement
    ============================================================================= */
 

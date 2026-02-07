@@ -54,6 +54,8 @@ export interface UploadedFile {
   size: number;
   /** MIME type (e.g., 'application/pdf') */
   type: string;
+  /** Actual File object for upload (set when file is added) */
+  file?: File;
 }
 
 // -----------------------------------------------------------------------------

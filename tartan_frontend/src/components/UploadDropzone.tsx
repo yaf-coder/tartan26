@@ -134,12 +134,13 @@ export function UploadDropzone({
                 return;
             }
 
-            // File is valid, add it
+            // File is valid, add it (keep File for API upload)
             newFiles.push({
                 id: crypto.randomUUID(),
                 name: file.name,
                 size: file.size,
                 type: file.type,
+                file,
             });
         });
 
@@ -230,7 +231,7 @@ export function UploadDropzone({
         <div className="upload-dropzone">
             {/* Label */}
             <label className="upload-dropzone__label">
-                Additional Context (Optional)
+                Optional: add PDFs as sources to answer the question
             </label>
 
             {/* Drop zone */}

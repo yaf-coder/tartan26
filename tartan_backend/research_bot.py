@@ -4,12 +4,13 @@ import csv
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from pypdf import PdfReader
 
-from dedalus_labs import AsyncDedalus
+from dedalus_labs import AsyncDedalus, RateLimitError
 
 # Load .env from same directory as this file (bulletproof)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
@@ -19,9 +20,16 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), overrid
 # ----------------------------
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 DEFAULT_MAX_QUOTES_PER_PDF = 20
-DEFAULT_CONCURRENCY = 6
+# Stay under Dedalus Free tier (60 req / 60 s): throttle + low concurrency
+DEFAULT_CONCURRENCY = 2
 DEFAULT_CHARS_PER_CHUNK = 12000
 DEFAULT_OUTPUT_NAME = "rq_quotes.csv"
+
+# Global rate limit: at most 1 request start per second (60/min)
+_rate_lock = asyncio.Lock()
+_last_request_time = 0.0
+MIN_REQUEST_INTERVAL = 1.0
+RATE_LIMIT_WAIT_SEC = 62
 
 
 # ----------------------------
@@ -150,27 +158,40 @@ TEXT:
 """.strip()
 
 
+async def _throttle() -> None:
+    """Wait until at least MIN_REQUEST_INTERVAL has passed since last request (global)."""
+    global _last_request_time
+    async with _rate_lock:
+        now = time.monotonic()
+        wait = _last_request_time + MIN_REQUEST_INTERVAL - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_request_time = time.monotonic()
+
+
 async def chat_json(client: AsyncDedalus, model: str, system: str, user: str) -> str:
     """
-    Calls the Dedalus client chat completions endpoint.
-    This avoids DedalusRunner.run() signature mismatches.
+    Call Dedalus chat completions. Throttled to stay under 60/min; retries on 429.
     """
-    # The Dedalus SDK is OpenAI-compatible, so this shape is typical.
-    # If your SDK differs slightly, the exception message will show the correct method/fields.
-    resp = await client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-
-    # OpenAI-style response: choices[0].message.content
-    try:
-        return resp.choices[0].message.content
-    except Exception:
-        # Fallback: stringify
-        return str(resp)
+    for attempt in range(1, 4):
+        await _throttle()
+        try:
+            resp = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            try:
+                return resp.choices[0].message.content
+            except Exception:
+                return str(resp)
+        except RateLimitError:
+            if attempt < 3:
+                await asyncio.sleep(RATE_LIMIT_WAIT_SEC)
+            else:
+                raise
 
 
 async def extract_quotes_from_chunk(
