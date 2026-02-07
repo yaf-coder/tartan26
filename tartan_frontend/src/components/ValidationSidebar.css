@@ -1,0 +1,158 @@
+/**
+ * =============================================================================
+ * VALIDATION SIDEBAR STYLES
+ * =============================================================================
+ */
+
+.validation-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    height: fit-content;
+    position: sticky;
+    top: var(--space-6);
+}
+
+/* Trust section */
+.validation-sidebar__trust {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.validation-sidebar__trust-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+/* Trust badges */
+.validation-sidebar__badges {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.validation-sidebar__badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-success);
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--color-success-subtle);
+    border-radius: var(--radius-md);
+}
+
+/* Verification meter */
+.validation-sidebar__meter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.validation-sidebar__meter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.validation-sidebar__meter-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.validation-sidebar__meter-value {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-primary);
+}
+
+.validation-sidebar__meter-bar {
+    height: 8px;
+    background-color: var(--color-background-dark);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.validation-sidebar__meter-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-slow);
+}
+
+.validation-sidebar__meter-fill--loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Metrics grid */
+.validation-sidebar__metrics {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+}
+
+.validation-sidebar__metric {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    background-color: var(--color-background-alt);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.validation-sidebar__metric-value {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+}
+
+.validation-sidebar__metric-loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.validation-sidebar__metric-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Status indicator */
+.validation-sidebar__status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+}
+
+.validation-sidebar__status--loading {
+    color: var(--color-primary);
+    background-color: var(--color-primary-subtle);
+}
+
+.validation-sidebar__status--complete {
+    color: var(--color-success);
+    background-color: var(--color-success-subtle);
+}
+
+.validation-sidebar__status-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--color-primary-subtle);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}

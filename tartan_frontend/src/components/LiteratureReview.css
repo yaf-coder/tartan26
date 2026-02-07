@@ -1,0 +1,84 @@
+/**
+ * =============================================================================
+ * LITERATURE REVIEW STYLES
+ * =============================================================================
+ */
+
+.literature-review {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    animation: slideUp var(--transition-normal) ease-out;
+}
+
+/* Header */
+.literature-review__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.literature-review__title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+}
+
+/* Stats badges row */
+.literature-review__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.literature-review__stat {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background-color: var(--color-background-alt);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-full);
+}
+
+.literature-review__stat strong {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Section titles */
+.literature-review__section-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-3);
+}
+
+/* Summary section */
+.literature-review__summary {
+    padding: var(--space-6);
+    background-color: var(--color-primary-subtle);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--color-primary);
+}
+
+.literature-review__summary-text {
+    font-size: var(--font-size-base);
+    line-height: 1.8;
+    color: var(--color-text-secondary);
+    margin-bottom: 0;
+}
+
+/* Sources section */
+.literature-review__sources {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Scrollable source list */
+.literature-review__source-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}

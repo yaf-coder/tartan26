@@ -1,0 +1,132 @@
+/**
+ * =============================================================================
+ * PROGRESS STEPPER STYLES
+ * =============================================================================
+ */
+
+.progress-stepper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    padding: var(--space-8);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    animation: fadeIn var(--transition-normal) ease-out;
+}
+
+/* Header with spinner */
+.progress-stepper__header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.progress-stepper__spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.progress-stepper__title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+}
+
+/* Steps list */
+.progress-stepper__steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Individual step */
+.progress-stepper__step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    transition: all var(--transition-fast);
+    margin-bottom: 0;
+}
+
+/* Step indicator (circle with number/checkmark) */
+.progress-stepper__indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-fast);
+}
+
+/* Pending state */
+.progress-stepper__step--pending .progress-stepper__indicator {
+    background-color: var(--color-background-dark);
+    color: var(--color-text-muted);
+}
+
+.progress-stepper__step--pending .progress-stepper__label {
+    color: var(--color-text-muted);
+}
+
+/* Active state */
+.progress-stepper__step--active .progress-stepper__indicator {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.progress-stepper__step--active .progress-stepper__label {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* Complete state */
+.progress-stepper__step--complete .progress-stepper__indicator {
+    background-color: var(--color-success);
+    color: white;
+}
+
+.progress-stepper__step--complete .progress-stepper__label {
+    color: var(--color-success);
+}
+
+/* Step label */
+.progress-stepper__label {
+    font-size: var(--font-size-base);
+    transition: all var(--transition-fast);
+}
+
+/* Pulsing dot for active step */
+.progress-stepper__pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-primary);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Progress bar */
+.progress-stepper__bar {
+    height: 4px;
+    background-color: var(--color-background-dark);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.progress-stepper__bar-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-slow);
+}
