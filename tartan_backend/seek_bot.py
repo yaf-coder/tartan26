@@ -10,6 +10,10 @@ Setup:
 Usage:
     python seek_bot.py --prompt "Your research problem …" --depth 2
     python seek_bot.py --prompt_file problem.txt   --depth 3
+
+Backend usage (importable):
+    from tartan_backend.seek_bot import run_seek
+    await run_seek(prompt_text="...", depth=2, papers_dir=".../papers")
 """
 
 import argparse
@@ -20,6 +24,7 @@ import re
 import shutil
 import sys
 import textwrap
+from typing import Optional, Set, List
 
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
@@ -29,26 +34,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAPERS_DIR = os.path.join(HERE, "papers")
-os.makedirs(PAPERS_DIR, exist_ok=True)
 
-# Track papers we've already downloaded/processed so we don't loop
-_seen_ids: set[str] = set()
+# Default storage for CLI usage (backend can override via run_seek(..., papers_dir=...))
+DEFAULT_PAPERS_DIR = os.path.join(HERE, "papers")
 
 MODEL = "anthropic/claude-opus-4-5"
 
-# ── Resolve the arxiv-mcp-server command ─────────────────────────────────────
-# Prefer the installed entry-point; fall back to running as a Python module.
-_arxiv_cmd = shutil.which("arxiv-mcp-server")
-if _arxiv_cmd:
-    ARXIV_SERVER_PARAMS = StdioServerParameters(
-        command=_arxiv_cmd,
-        args=["--storage-path", PAPERS_DIR],
-    )
-else:
-    ARXIV_SERVER_PARAMS = StdioServerParameters(
+
+# ── MCP server parameter builder ──────────────────────────────────────────────
+
+
+def build_arxiv_server_params(storage_path: str) -> StdioServerParameters:
+    """
+    Resolve the arxiv-mcp-server command and return StdioServerParameters.
+
+    Prefer the installed entry-point; fall back to running as a Python module.
+    """
+    os.makedirs(storage_path, exist_ok=True)
+
+    arxiv_cmd = shutil.which("arxiv-mcp-server")
+    if arxiv_cmd:
+        return StdioServerParameters(
+            command=arxiv_cmd,
+            args=["--storage-path", storage_path],
+        )
+
+    return StdioServerParameters(
         command=sys.executable,
-        args=["-m", "arxiv_mcp_server", "--storage-path", PAPERS_DIR],
+        args=["-m", "arxiv_mcp_server", "--storage-path", storage_path],
     )
 
 
@@ -57,18 +70,18 @@ else:
 
 def _extract_text(result: types.CallToolResult) -> str:
     """Pull the concatenated text from an MCP CallToolResult."""
-    parts: list[str] = []
+    parts: List[str] = []
     for block in result.content:
         if isinstance(block, types.TextContent):
             parts.append(block.text)
     return "\n".join(parts)
 
 
-async def _prompt_claude(text: str) -> str:
+async def _prompt_claude(text: str, model: str = MODEL) -> str:
     """Send *text* to Claude via Dedalus and return the response string."""
     client = AsyncDedalus()
     runner = DedalusRunner(client)
-    response = await runner.run(input=text, model=MODEL)
+    response = await runner.run(input=text, model=model)
     return response.final_output
 
 
@@ -79,6 +92,7 @@ async def retrieve(
     keyword: str,
     depth: int,
     mcp_session: ClientSession,
+    seen_ids: Set[str],
 ) -> None:
     """
     Use the local arXiv MCP server to search for *keyword*, download &
@@ -105,15 +119,14 @@ async def retrieve(
         return
 
     # Parse paper IDs from the search output.
-    # The MCP server typically returns structured text; we look for arXiv IDs.
     # Common patterns: "2401.12345" or "2401.12345v2"
     id_pattern = re.compile(r"\b(\d{4}\.\d{4,5}(?:v\d+)?)\b")
     found_ids = id_pattern.findall(search_text)
 
     # Pick the first ID we haven't visited yet
-    paper_id = None
+    paper_id: Optional[str] = None
     for pid in found_ids:
-        if pid not in _seen_ids:
+        if pid not in seen_ids:
             paper_id = pid
             break
 
@@ -122,7 +135,7 @@ async def retrieve(
         print(f"      Search output (first 300 chars): {search_text[:300]}")
         return
 
-    _seen_ids.add(paper_id)
+    seen_ids.add(paper_id)
     print(f"   🔗 Paper ID: {paper_id}")
 
     # ── 2. Download ──
@@ -165,7 +178,7 @@ async def retrieve(
     print(f"   📝 Got {len(paper_text)} chars – recursing with depth={depth - 1}")
 
     # Recurse
-    await main(paper_text, depth - 1, mcp_session)
+    await main(paper_text, depth - 1, mcp_session, seen_ids)
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -175,6 +188,7 @@ async def main(
     prompt_text: str,
     depth: int,
     mcp_session: ClientSession,
+    seen_ids: Set[str],
 ) -> None:
     """
     Core loop.
@@ -190,7 +204,8 @@ async def main(
     print(f"{'='*60}")
 
     # ── Step 1: Ask Claude for keywords + cited paper titles ──
-    extraction_prompt = textwrap.dedent(f"""\
+    extraction_prompt = textwrap.dedent(
+        f"""\
         You are a research librarian AI. Given the following research text,
         produce a JSON object with exactly two keys:
 
@@ -206,7 +221,8 @@ async def main(
         --- BEGIN TEXT ---
         {prompt_text}
         --- END TEXT ---
-    """)
+        """
+    )
 
     print("\n🤖 Asking Claude for keywords & cited titles …")
     raw_response = await _prompt_claude(extraction_prompt)
@@ -220,7 +236,6 @@ async def main(
         data = json.loads(cleaned)
     except json.JSONDecodeError:
         print(f"   ⚠ Claude returned non-JSON – attempting regex fallback")
-        # Try to find a JSON object in the response
         m = re.search(r"\{.*\}", raw_response, re.DOTALL)
         if m:
             try:
@@ -232,8 +247,8 @@ async def main(
             print(f"   ❌ No JSON found. Raw response:\n{raw_response[:500]}")
             return
 
-    keywords: list[str] = data.get("keywords", [])
-    cited_titles: list[str] = data.get("cited_titles", [])
+    keywords: List[str] = data.get("keywords", []) or []
+    cited_titles: List[str] = data.get("cited_titles", []) or []
 
     print(f"\n   Keywords ({len(keywords)}):")
     for kw in keywords:
@@ -245,30 +260,50 @@ async def main(
     # ── Step 3: Retrieve every keyword + cited title ──
     all_queries = keywords + cited_titles
     for query in all_queries:
-        await retrieve(query, depth, mcp_session)
+        await retrieve(query, depth, mcp_session, seen_ids)
 
 
-# ── CLI entry point ──────────────────────────────────────────────────────────
+# ── Public async entrypoint for backend usage ────────────────────────────────
 
 
-async def _run(prompt_text: str, depth: int) -> None:
-    """Spawn the arXiv MCP server, open a session, and kick off main()."""
+async def run_seek(
+    prompt_text: str,
+    depth: int = 1,
+    papers_dir: str = DEFAULT_PAPERS_DIR,
+    *,
+    print_tools: bool = True,
+) -> None:
+    """
+    Backend-friendly entrypoint.
+
+    Spawns the arXiv MCP server configured to download into *papers_dir*,
+    opens a session, and kicks off the recursive search.
+    """
+    if depth < 0:
+        raise ValueError("depth must be a non-negative integer")
+
+    server_params = build_arxiv_server_params(papers_dir)
+    seen_ids: Set[str] = set()
+
     print(f"🚀 Starting arXiv MCP server …")
-    print(f"   Command: {ARXIV_SERVER_PARAMS.command} {' '.join(ARXIV_SERVER_PARAMS.args)}")
-    print(f"   Storage: {PAPERS_DIR}\n")
+    print(f"   Command: {server_params.command} {' '.join(server_params.args)}")
+    print(f"   Storage: {papers_dir}\n")
 
-    async with stdio_client(ARXIV_SERVER_PARAMS) as (read, write):
+    async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
-            # Quick sanity check: list available tools
-            tools = await session.list_tools()
-            tool_names = [t.name for t in tools.tools]
-            print(f"   MCP tools available: {tool_names}\n")
+            if print_tools:
+                tools = await session.list_tools()
+                tool_names = [t.name for t in tools.tools]
+                print(f"   MCP tools available: {tool_names}\n")
 
-            await main(prompt_text, depth, session)
+            await main(prompt_text, depth, session, seen_ids)
 
     print("\n✅ Done. arXiv MCP server shut down.")
+
+
+# ── CLI entry point ──────────────────────────────────────────────────────────
 
 
 def cli():
@@ -284,6 +319,12 @@ def cli():
         default=1,
         help="Recursion depth (0 = do nothing). Default: 1",
     )
+    parser.add_argument(
+        "--papers_dir",
+        type=str,
+        default=DEFAULT_PAPERS_DIR,
+        help=f"Folder to store downloaded PDFs. Default: {DEFAULT_PAPERS_DIR}",
+    )
     args = parser.parse_args()
 
     if args.prompt_file:
@@ -292,10 +333,7 @@ def cli():
     else:
         prompt_text = args.prompt
 
-    if args.depth < 0:
-        raise SystemExit("depth must be a non-negative integer.")
-
-    asyncio.run(_run(prompt_text, args.depth))
+    asyncio.run(run_seek(prompt_text=prompt_text, depth=args.depth, papers_dir=args.papers_dir))
 
 
 if __name__ == "__main__":

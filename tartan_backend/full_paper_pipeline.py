@@ -18,10 +18,16 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_CENTER
 
+# NOTE: these were referenced in chat() but not imported in the original file.
+# Keeping behavior the same (retry/backoff) requires these imports.
+import random
+import httpx
+from httpx import TimeoutException as APITimeoutError  # fallback alias for compatibility
+
 # Load .env next to this file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-# Most recent/powerful Claude listed in Dedalus docs: Claude Opus 4.6 :contentReference[oaicite:1]{index=1}
+# Most recent/powerful Claude listed in Dedalus docs: Claude Opus 4.6
 DEFAULT_MODEL = "anthropic/claude-opus-4-6"
 
 
@@ -55,7 +61,7 @@ async def chat(
     Robust chat call with retries + exponential backoff.
     timeout_s applies to the underlying HTTP request.
     """
-    last_err = None
+    last_err: Optional[Exception] = None
     for attempt in range(1, max_retries + 1):
         try:
             resp = await client.chat.completions.create(
@@ -64,7 +70,6 @@ async def chat(
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                # Dedalus SDK passes these through to httpx; supported in current releases
                 timeout=timeout_s,
             )
             try:
@@ -80,7 +85,10 @@ async def chat(
 
         # Backoff
         sleep_s = min(2 ** attempt + random.random(), 30.0)
-        print(f"⚠️  chat() attempt {attempt}/{max_retries} failed ({type(last_err).__name__}). Retrying in {sleep_s:.1f}s...")
+        print(
+            f"⚠️  chat() attempt {attempt}/{max_retries} failed ({type(last_err).__name__}). "
+            f"Retrying in {sleep_s:.1f}s..."
+        )
         await asyncio.sleep(sleep_s)
 
     raise RuntimeError(f"chat() failed after {max_retries} retries: {last_err}")
@@ -156,7 +164,7 @@ async def build_citations_json(
     model: str,
     papers_dir: str,
     out_path: str,
-    max_pages: int = 2
+    max_pages: int = 2,
 ) -> Dict[str, Any]:
     pdfs = [
         os.path.join(papers_dir, f)
@@ -174,7 +182,7 @@ async def build_citations_json(
         if not snippet:
             citations[fname] = {
                 "reference": f"{os.path.splitext(fname)[0]}. (n.d.). [PDF].",
-                "footnote": f"{os.path.splitext(fname)[0]}, n.d."
+                "footnote": f"{os.path.splitext(fname)[0]}, n.d.",
             }
             return
 
@@ -193,11 +201,10 @@ PDF EXCERPT:
         raw = await chat(client, model, CITE_SYSTEM, prompt)
         obj = safe_json_loads(raw)
         if not isinstance(obj, dict) or "reference" not in obj or "footnote" not in obj:
-            # fallback if model returned non-JSON
             base = os.path.splitext(fname)[0].replace("_", " ")
             citations[fname] = {
                 "reference": f"{base}. (n.d.). [PDF].",
-                "footnote": f"{base}, n.d."
+                "footnote": f"{base}, n.d.",
             }
             return
 
@@ -212,7 +219,7 @@ PDF EXCERPT:
 
         citations[fname] = {"reference": ref, "footnote": foot}
 
-    # modest parallelism (citations are short; avoid hammering)
+    # modest parallelism
     sem = asyncio.Semaphore(6)
 
     async def wrapped(path: str):
@@ -220,6 +227,11 @@ PDF EXCERPT:
             await one(path)
 
     await asyncio.gather(*(wrapped(p) for p in pdfs))
+
+    # Ensure output directory exists
+    out_dir = os.path.dirname(os.path.abspath(out_path))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(citations, f, ensure_ascii=False, indent=2)
@@ -253,15 +265,17 @@ def build_evidence(rows: List[Dict[str, str]], citations: Dict[str, Any], max_it
         foot = c.get("footnote") or f"{os.path.splitext(fname)[0]}, n.d."
         ref = c.get("reference") or f"{os.path.splitext(fname)[0]}. (n.d.). [PDF]."
 
-        out.append(EvidenceItem(
-            eid=f"E{i}",
-            filename=fname,
-            page=page,
-            idea=idea,
-            quote=quote,
-            footnote=foot,
-            reference=ref
-        ))
+        out.append(
+            EvidenceItem(
+                eid=f"E{i}",
+                filename=fname,
+                page=page,
+                idea=idea,
+                quote=quote,
+                footnote=foot,
+                reference=ref,
+            )
+        )
     return out
 
 
@@ -318,6 +332,7 @@ Return JSON:
 }
 """.strip()
 
+
 def outline_prompt(topic: str, rq: str, notes: str, evidence_pack: str) -> str:
     return f"""
 TOPIC:
@@ -367,7 +382,7 @@ def expand_prompt(
     evidence_pack: str,
     references: str,
     min_words: int,
-    max_words: int
+    max_words: int,
 ) -> str:
     return f"""
 Write the full paper now.
@@ -489,7 +504,7 @@ def markdown_to_pdf(md_text: str, pdf_path: str):
         rightMargin=1 * inch,
         topMargin=1 * inch,
         bottomMargin=1 * inch,
-        title="Research Paper"
+        title="Research Paper",
     )
 
     styles = getSampleStyleSheet()
@@ -498,7 +513,7 @@ def markdown_to_pdf(md_text: str, pdf_path: str):
         parent=styles["Normal"],
         fontName="Times-Roman",
         fontSize=12,
-        leading=24,     # double-ish spacing
+        leading=24,  # double-ish spacing
         spaceAfter=12,
     )
     title_style = ParagraphStyle(
@@ -604,7 +619,259 @@ Do NOT include References yet unless this section is the final "References".
 
 
 # ----------------------------
-# Main pipeline
+# Public async entrypoint (backend-friendly)
+# ----------------------------
+async def generate(
+    *,
+    papers_dir: str,
+    notes_csv: str,
+    topic: str,
+    rq: str,
+    out_md: str,
+    out_pdf: str,
+    model: str = DEFAULT_MODEL,
+    citations_json: Optional[str] = None,
+    # APA-ish header block fields
+    title: str = "Research Paper",
+    author: str = "Your Name",
+    institution: str = "Your Institution",
+    course: str = "Course",
+    instructor: str = "Instructor",
+    date: str = "Date",
+    min_words: int = 1400,
+    max_words: int = 2400,
+    max_iters: int = 4,
+    progress_cb=None,
+) -> Dict[str, str]:
+    """
+    Backend-friendly equivalent of main_async().
+
+    Generates citations.json (unless citations_json provided), then outline,
+    then section-by-section expansion, then grade/revise loop, and finally
+    writes out_md and out_pdf.
+
+    Returns artifact paths.
+    """
+    api_key = os.getenv("DEDALUS_API_KEY")
+    if not api_key:
+        raise SystemExit("DEDALUS_API_KEY is not set. Put it in .env or export it.")
+
+    if not os.path.isdir(papers_dir):
+        raise SystemExit(f"papers_dir not found: {papers_dir}")
+
+    if not os.path.isfile(notes_csv):
+        raise SystemExit(f"notes_csv not found: {notes_csv}")
+
+    # Default citations_json next to out_md if not provided
+    if citations_json is None:
+        out_base_dir = os.path.dirname(os.path.abspath(out_md))
+        citations_json = os.path.join(out_base_dir, "citations.json")
+
+    # Ensure output directories exist
+    os.makedirs(os.path.dirname(os.path.abspath(out_md)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(out_pdf)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(citations_json)), exist_ok=True)
+
+    client = AsyncDedalus(api_key=api_key)
+
+    def prog(p: int):
+        if callable(progress_cb):
+            try:
+                progress_cb(int(p))
+            except Exception:
+                pass
+
+    prog(3)
+
+    # 1) Build citations.json from PDFs
+    print(f"▶ Building citations.json from PDFs in {papers_dir} ...")
+    citations = await build_citations_json(
+        client=client,
+        model=model,
+        papers_dir=papers_dir,
+        out_path=citations_json,
+        max_pages=2,
+    )
+    print(f"✅ Wrote: {citations_json} ({len(citations)} entries)")
+
+    prog(15)
+
+    # 2) Read notes CSV (all_quotes_with_ideas.csv)
+    rows = read_quotes_with_ideas(notes_csv)
+    if not rows:
+        raise SystemExit("Your notes_csv has no valid rows.")
+
+    # Notes text = compact "idea bank"
+    notes_lines = []
+    for r in rows[:250]:
+        idea = r.get("idea", "").strip()
+        if idea:
+            notes_lines.append(f"- {idea}")
+    notes_text = "\n".join(notes_lines) if notes_lines else "No ideas column found; will rely more on quotes."
+
+    evidence = build_evidence(rows, citations, max_items=100)
+    evidence_pack = evidence_pack_text(evidence, max_items=80)
+    refs = references_text(evidence)
+
+    prog(25)
+
+    # 3) Outline first
+    print("▶ Drafting outline ...")
+    outline_raw = await chat(
+        client=client,
+        model=model,
+        system=OUTLINE_SYSTEM,
+        user=outline_prompt(topic, rq, notes_text, evidence_pack),
+    )
+    outline = safe_json_loads(outline_raw)
+    if not isinstance(outline, dict):
+        outline_raw2 = await chat(
+            client=client,
+            model=model,
+            system=OUTLINE_SYSTEM,
+            user="Return ONLY valid JSON.\n\n" + outline_prompt(topic, rq, notes_text, evidence_pack),
+        )
+        outline = safe_json_loads(outline_raw2)
+    if not isinstance(outline, dict):
+        raise SystemExit("Failed to parse outline JSON. Try reducing notes/evidence size.")
+
+    prog(35)
+
+    # 4) Expand into a paper (section-by-section)
+    header = {
+        "title": title,
+        "author": author,
+        "institution": institution,
+        "course": course,
+        "instructor": instructor,
+        "date": date,
+    }
+
+    print("▶ Expanding outline into full draft (section-by-section) ...")
+
+    sections = outline_sections(outline)
+
+    paper_parts: List[str] = []
+
+    # Title/header block so PDF looks good
+    paper_parts.append(
+        f"# {header['title']}\n\n"
+        f"{header['author']}\n"
+        f"{header['institution']}\n"
+        f"{header['course']}\n"
+        f"{header['instructor']}\n"
+        f"{header['date']}\n"
+    )
+
+    already = "\n\n".join(paper_parts)
+
+    for idx, sec in enumerate(sections, 1):
+        # spread progress across sections
+        # (35 -> 70 range)
+        if sections:
+            prog(35 + int((idx - 1) * 35 / max(1, len(sections))))
+
+        sec_text = await chat(
+            client=client,
+            model=model,
+            system=SECTION_SYSTEM,
+            user=section_expand_prompt(
+                header=header,
+                topic=topic,
+                rq=rq,
+                outline_json=outline,
+                section_obj=sec,
+                evidence_pack=evidence_pack,
+                references=refs,
+                already_written=already,
+            ),
+            timeout_s=240.0,
+            max_retries=6,
+        )
+        sec_text = sec_text.strip()
+        paper_parts.append(sec_text)
+        already = "\n\n".join(paper_parts)
+
+    # Ensure References present.
+    if "## References" not in already and "\nReferences\n" not in already:
+        paper_parts.append("## References\n\n" + refs)
+
+    draft = "\n\n".join(paper_parts)
+
+    prog(70)
+
+    # 5) Grade/revise loop
+    best = draft
+    best_score = -1
+    last_grade: Optional[Dict[str, Any]] = None
+
+    for it in range(max_iters):
+        prog(70 + int(it * 20 / max(1, max_iters)))
+
+        grade_raw = await chat(
+            client=client,
+            model=model,
+            system=GRADER_SYSTEM,
+            user=grade_prompt(draft, rq, min_words, max_words),
+        )
+        grade = safe_json_loads(grade_raw)
+        if not isinstance(grade, dict):
+            grade_raw2 = await chat(
+                client=client,
+                model=model,
+                system=GRADER_SYSTEM,
+                user="Return ONLY valid JSON.\n\n" + grade_prompt(draft, rq, min_words, max_words),
+            )
+            grade = safe_json_loads(grade_raw2)
+
+        if not isinstance(grade, dict):
+            last_grade = {
+                "satisfactory": False,
+                "score": 0,
+                "major_issues": ["Could not parse grader JSON."],
+                "minor_issues": [],
+                "revision_plan": [],
+            }
+            break
+
+        last_grade = grade
+        score = int(grade.get("score", 0)) if str(grade.get("score", "")).isdigit() else 0
+        if score > best_score:
+            best_score = score
+            best = draft
+
+        if bool(grade.get("satisfactory")):
+            best = draft
+            break
+
+        print("▶ Revising draft ...")
+        draft = await chat(
+            client=client,
+            model=model,
+            system=EXPAND_SYSTEM,
+            user=revise_prompt(draft, grade, notes_text, evidence_pack, refs),
+        )
+
+    prog(92)
+
+    # 6) Write outputs
+    with open(out_md, "w", encoding="utf-8") as f:
+        f.write(best.strip() + "\n")
+
+    markdown_to_pdf(best, out_pdf)
+
+    print(f"✅ Wrote: {out_md}")
+    print(f"✅ Wrote: {out_pdf}")
+    if last_grade:
+        print("Final grade snapshot:", json.dumps(last_grade, ensure_ascii=False))
+
+    prog(100)
+
+    return {"out_md": out_md, "out_pdf": out_pdf, "citations_json": citations_json}
+
+
+# ----------------------------
+# Main pipeline (CLI)
 # ----------------------------
 async def main_async():
     parser = argparse.ArgumentParser(description="PDF->citations.json->outline->paper->PDF (Claude Opus 4.6).")
@@ -632,172 +899,25 @@ async def main_async():
     parser.add_argument("--out_pdf", default="./paper.pdf")
     args = parser.parse_args()
 
-    api_key = os.getenv("DEDALUS_API_KEY")
-    if not api_key:
-        raise SystemExit("DEDALUS_API_KEY is not set. Put it in .env or export it.")
-
-    if not os.path.isdir(args.papers_dir):
-        raise SystemExit(f"papers_dir not found: {args.papers_dir}")
-
-    if not os.path.isfile(args.notes_csv):
-        raise SystemExit(f"notes_csv not found: {args.notes_csv}")
-
-    client = AsyncDedalus(api_key=api_key)
-
-    # 1) Build citations.json from PDFs
-    print(f"▶ Building citations.json from PDFs in {args.papers_dir} ...")
-    citations = await build_citations_json(
-        client=client,
-        model=args.model,
+    await generate(
         papers_dir=args.papers_dir,
-        out_path=args.citations_json,
-        max_pages=2
-    )
-    print(f"✅ Wrote: {args.citations_json} ({len(citations)} entries)")
-
-    # 2) Read notes CSV (all_quotes_with_ideas.csv)
-    rows = read_quotes_with_ideas(args.notes_csv)
-    if not rows:
-        raise SystemExit("Your notes_csv has no valid rows.")
-
-    # Notes text = compact "idea bank" derived from the CSV (keeps the model grounded)
-    # We do NOT pass full quotes list as prose; we pass structured evidence pack + a short notes summary.
-    notes_lines = []
-    for r in rows[:250]:
-        idea = r.get("idea", "").strip()
-        if idea:
-            notes_lines.append(f"- {idea}")
-    notes_text = "\n".join(notes_lines) if notes_lines else "No ideas column found; will rely more on quotes."
-
-    evidence = build_evidence(rows, citations, max_items=100)
-    evidence_pack = evidence_pack_text(evidence, max_items=80)
-    refs = references_text(evidence)
-
-    # 3) Outline first
-    print("▶ Drafting outline ...")
-    outline_raw = await chat(
-        client=client,
+        notes_csv=args.notes_csv,
+        topic=args.topic,
+        rq=args.rq,
+        out_md=args.out_md,
+        out_pdf=args.out_pdf,
         model=args.model,
-        system=OUTLINE_SYSTEM,
-        user=outline_prompt(args.topic, args.rq, notes_text, evidence_pack),
+        citations_json=args.citations_json,
+        title=args.title,
+        author=args.author,
+        institution=args.institution,
+        course=args.course,
+        instructor=args.instructor,
+        date=args.date,
+        min_words=args.min_words,
+        max_words=args.max_words,
+        max_iters=args.max_iters,
     )
-    outline = safe_json_loads(outline_raw)
-    if not isinstance(outline, dict):
-        outline_raw2 = await chat(
-            client=client,
-            model=args.model,
-            system=OUTLINE_SYSTEM,
-            user="Return ONLY valid JSON.\n\n" + outline_prompt(args.topic, args.rq, notes_text, evidence_pack),
-        )
-        outline = safe_json_loads(outline_raw2)
-    if not isinstance(outline, dict):
-        raise SystemExit("Failed to parse outline JSON. Try reducing notes/evidence size.")
-
-    # 4) Expand into a paper
-    header = {
-        "title": args.title,
-        "author": args.author,
-        "institution": args.institution,
-        "course": args.course,
-        "instructor": args.instructor,
-        "date": args.date,
-    }
-
-    print("▶ Expanding outline into full draft (section-by-section) ...")
-
-    sections = outline_sections(outline)
-
-    paper_parts: List[str] = []
-
-    # Start with a title line so PDF looks good
-    paper_parts.append(f"# {header['title']}\n\n{header['author']}\n{header['institution']}\n{header['course']}\n{header['instructor']}\n{header['date']}\n")
-
-    already = "\n\n".join(paper_parts)
-
-    for idx, sec in enumerate(sections, 1):
-        # Bigger timeout for long sections
-        sec_text = await chat(
-            client=client,
-            model=args.model,
-            system=SECTION_SYSTEM,
-            user=section_expand_prompt(
-                header=header,
-                topic=args.topic,
-                rq=args.rq,
-                outline_json=outline,
-                section_obj=sec,
-                evidence_pack=evidence_pack,
-                references=refs,
-                already_written=already,
-            ),
-            timeout_s=240.0,
-            max_retries=6,
-        )
-        sec_text = sec_text.strip()
-        paper_parts.append(sec_text)
-        already = "\n\n".join(paper_parts)
-
-    # Ensure References present. If outline didn't include a References section, append one.
-    if "## References" not in already and "\nReferences\n" not in already:
-        paper_parts.append("## References\n\n" + refs)
-
-    draft = "\n\n".join(paper_parts)
-
-
-    # 5) Grade/revise loop
-    best = draft
-    best_score = -1
-    last_grade: Optional[Dict[str, Any]] = None
-
-    for _ in range(args.max_iters):
-        grade_raw = await chat(
-            client=client,
-            model=args.model,
-            system=GRADER_SYSTEM,
-            user=grade_prompt(draft, args.rq, args.min_words, args.max_words),
-        )
-        grade = safe_json_loads(grade_raw)
-        if not isinstance(grade, dict):
-            grade_raw2 = await chat(
-                client=client,
-                model=args.model,
-                system=GRADER_SYSTEM,
-                user="Return ONLY valid JSON.\n\n" + grade_prompt(draft, args.rq, args.min_words, args.max_words),
-            )
-            grade = safe_json_loads(grade_raw2)
-
-        if not isinstance(grade, dict):
-            last_grade = {"satisfactory": False, "score": 0, "major_issues": ["Could not parse grader JSON."], "minor_issues": [], "revision_plan": []}
-            break
-
-        last_grade = grade
-        score = int(grade.get("score", 0)) if str(grade.get("score", "")).isdigit() else 0
-        if score > best_score:
-            best_score = score
-            best = draft
-
-        if bool(grade.get("satisfactory")):
-            best = draft
-            break
-
-        print("▶ Revising draft ...")
-        draft = await chat(
-            client=client,
-            model=args.model,
-            system=EXPAND_SYSTEM,
-            user=revise_prompt(draft, grade, notes_text, evidence_pack, refs),
-        )
-
-    # 6) Write outputs
-    with open(args.out_md, "w", encoding="utf-8") as f:
-        f.write(best.strip() + "\n")
-
-    markdown_to_pdf(best, args.out_pdf)
-
-    print(f"✅ Wrote: {args.out_md}")
-    print(f"✅ Wrote: {args.out_pdf}")
-    if last_grade:
-        print("Final grade snapshot:", json.dumps(last_grade, ensure_ascii=False))
 
 
 def main():

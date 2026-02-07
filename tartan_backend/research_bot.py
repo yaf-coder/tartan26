@@ -155,8 +155,6 @@ async def chat_json(client: AsyncDedalus, model: str, system: str, user: str) ->
     Calls the Dedalus client chat completions endpoint.
     This avoids DedalusRunner.run() signature mismatches.
     """
-    # The Dedalus SDK is OpenAI-compatible, so this shape is typical.
-    # If your SDK differs slightly, the exception message will show the correct method/fields.
     resp = await client.chat.completions.create(
         model=model,
         messages=[
@@ -164,12 +162,9 @@ async def chat_json(client: AsyncDedalus, model: str, system: str, user: str) ->
             {"role": "user", "content": user},
         ],
     )
-
-    # OpenAI-style response: choices[0].message.content
     try:
         return resp.choices[0].message.content
     except Exception:
-        # Fallback: stringify
         return str(resp)
 
 
@@ -230,39 +225,46 @@ async def process_pdf(
     return verified[:max_quotes]
 
 
-async def async_main():
-    parser = argparse.ArgumentParser(description="Extract verified quotes from PDFs into a CSV.")
-    parser.add_argument("--papers_dir", default="./papers", help="Folder containing PDF files.")
-    parser.add_argument("--csv_dir", default="./csvs", help="Folder to write CSV output into.")
-    parser.add_argument("--rq", required=True, help="Research question.")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Dedalus model identifier.")
-    parser.add_argument("--max_quotes_per_pdf", type=int, default=DEFAULT_MAX_QUOTES_PER_PDF)
-    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
-    parser.add_argument("--chars_per_chunk", type=int, default=DEFAULT_CHARS_PER_CHUNK)
-    parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output CSV filename.")
-    args = parser.parse_args()
+# ----------------------------
+# Public async entrypoint (backend-friendly)
+# ----------------------------
+async def run_extract(
+    *,
+    papers_dir: str,
+    csv_dir: str,
+    rq: str,
+    model: str = DEFAULT_MODEL,
+    max_quotes_per_pdf: int = DEFAULT_MAX_QUOTES_PER_PDF,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    chars_per_chunk: int = DEFAULT_CHARS_PER_CHUNK,
+    output_name: str = DEFAULT_OUTPUT_NAME,
+) -> str:
+    """
+    Extract verified quotes from all PDFs in *papers_dir* and write a CSV to *csv_dir*.
+    Returns the output CSV path.
 
+    This is the importable equivalent of the CLI path in async_main().
+    """
     if os.getenv("DEDALUS_API_KEY") in (None, ""):
         raise SystemExit("DEDALUS_API_KEY is not set. Put it in .env or export it.")
 
-    pdf_folder = args.papers_dir
-    if not os.path.isdir(pdf_folder):
-        raise SystemExit(f"PDF folder not found: {pdf_folder}")
+    if not os.path.isdir(papers_dir):
+        raise SystemExit(f"PDF folder not found: {papers_dir}")
 
     pdfs = [
-        os.path.join(pdf_folder, f)
-        for f in os.listdir(pdf_folder)
+        os.path.join(papers_dir, f)
+        for f in os.listdir(papers_dir)
         if f.lower().endswith(".pdf")
     ]
     if not pdfs:
-        raise SystemExit(f"No PDFs found in: {pdf_folder}")
+        raise SystemExit(f"No PDFs found in: {papers_dir}")
 
-    os.makedirs(args.csv_dir, exist_ok=True)
-    output_csv = os.path.join(args.csv_dir, args.output_name)
+    os.makedirs(csv_dir, exist_ok=True)
+    output_csv = os.path.join(csv_dir, output_name)
 
     client = AsyncDedalus(api_key=os.getenv("DEDALUS_API_KEY"))
 
-    sem = asyncio.Semaphore(args.concurrency)
+    sem = asyncio.Semaphore(concurrency)
     rows: List[Dict[str, Any]] = []
 
     async def worker(path: str):
@@ -270,10 +272,10 @@ async def async_main():
             quotes = await process_pdf(
                 client=client,
                 pdf_path=path,
-                rq=args.rq,
-                max_quotes=args.max_quotes_per_pdf,
-                chars_per_chunk=args.chars_per_chunk,
-                model=args.model,
+                rq=rq,
+                max_quotes=max_quotes_per_pdf,
+                chars_per_chunk=chars_per_chunk,
+                model=model,
             )
             for q in quotes:
                 rows.append(
@@ -286,7 +288,11 @@ async def async_main():
 
     await asyncio.gather(*(worker(p) for p in pdfs))
 
-    rows.sort(key=lambda r: (r["filename"], int(r["page_number"])) if str(r["page_number"]).isdigit() else (r["filename"], 10**9))
+    rows.sort(
+        key=lambda r: (r["filename"], int(r["page_number"]))
+        if str(r["page_number"]).isdigit()
+        else (r["filename"], 10**9)
+    )
 
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["quote", "page_number", "filename"])
@@ -294,6 +300,34 @@ async def async_main():
         w.writerows(rows)
 
     print(f"Wrote {len(rows)} verified quotes to {output_csv}")
+    return output_csv
+
+
+# ----------------------------
+# CLI
+# ----------------------------
+async def async_main():
+    parser = argparse.ArgumentParser(description="Extract verified quotes from PDFs into a CSV.")
+    parser.add_argument("--papers_dir", default="./papers", help="Folder containing PDF files.")
+    parser.add_argument("--csv_dir", default="./csvs", help="Folder to write CSV output into.")
+    parser.add_argument("--rq", required=True, help="Research question.")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Dedalus model identifier.")
+    parser.add_argument("--max_quotes_per_pdf", type=int, default=DEFAULT_MAX_QUOTES_PER_PDF)
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    parser.add_argument("--chars_per_chunk", type=int, default=DEFAULT_CHARS_PER_CHUNK)
+    parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output CSV filename.")
+    args = parser.parse_args()
+
+    await run_extract(
+        papers_dir=args.papers_dir,
+        csv_dir=args.csv_dir,
+        rq=args.rq,
+        model=args.model,
+        max_quotes_per_pdf=args.max_quotes_per_pdf,
+        concurrency=args.concurrency,
+        chars_per_chunk=args.chars_per_chunk,
+        output_name=args.output_name,
+    )
 
 
 def main():

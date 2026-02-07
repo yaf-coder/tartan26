@@ -23,8 +23,10 @@ SYSTEM = (
     "Do not mention page numbers or filenames. Keep it a single sentence."
 )
 
+
 def normalize_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
+
 
 async def synthesize_one(client: AsyncDedalus, model: str, quote: str, rq: Optional[str]) -> str:
     quote = normalize_ws(quote)
@@ -60,8 +62,6 @@ Constraints:
 
     # Make it cleaner and enforce "single sentence-ish"
     text = normalize_ws(text)
-    # If the model returned multiple lines/sentences, keep the first sentence-like chunk.
-    # (Still not perfect, but helps.)
     for sep in ["\n", "  "]:
         if sep in text:
             text = text.split(sep)[0].strip()
@@ -69,37 +69,47 @@ Constraints:
     return text
 
 
-async def main_async():
-    parser = argparse.ArgumentParser(description="Add synthesized 'idea' column to cleaned quote CSV.")
-    parser.add_argument("--input_csv", required=True, help="Path to cleaned CSV (quote,page_number,filename)")
-    parser.add_argument("--output_csv", default=None, help="Path to write output CSV (default: *_with_ideas.csv)")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Dedalus model identifier")
-    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY, help="Concurrent requests")
-    parser.add_argument("--rq", default=None, help="Optional research question context")
-    parser.add_argument("--in_place", action="store_true", help="Overwrite input CSV (not recommended)")
-    args = parser.parse_args()
+# ----------------------------
+# Public async entrypoint (backend-friendly)
+# ----------------------------
+async def add_ideas_to_csv(
+    *,
+    input_csv: str,
+    output_csv: Optional[str] = None,
+    model: str = DEFAULT_MODEL,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    rq: Optional[str] = None,
+    in_place: bool = False,
+) -> str:
+    """
+    Add a synthesized 'idea' column to a cleaned quote CSV.
 
+    Input schema must include: quote,page_number,filename
+    Output schema: quote,page_number,filename,idea
+
+    Returns the output CSV path.
+    """
     api_key = os.getenv("DEDALUS_API_KEY")
     if not api_key:
         raise SystemExit("DEDALUS_API_KEY is not set. Put it in .env or export it.")
 
-    if not os.path.isfile(args.input_csv):
-        raise SystemExit(f"Input CSV not found: {args.input_csv}")
+    if not os.path.isfile(input_csv):
+        raise SystemExit(f"Input CSV not found: {input_csv}")
 
-    if args.in_place and args.output_csv is not None:
-        raise SystemExit("Use either --in_place OR --output_csv, not both.")
+    if in_place and output_csv is not None:
+        raise SystemExit("Use either in_place=True OR provide output_csv, not both.")
 
-    if args.in_place:
-        output_csv = args.input_csv
+    if in_place:
+        out_csv = input_csv
     else:
-        if args.output_csv:
-            output_csv = args.output_csv
+        if output_csv:
+            out_csv = output_csv
         else:
-            base, ext = os.path.splitext(args.input_csv)
-            output_csv = f"{base}_with_ideas{ext}"
+            base, ext = os.path.splitext(input_csv)
+            out_csv = f"{base}_with_ideas{ext}"
 
     # Read rows
-    with open(args.input_csv, "r", encoding="utf-8", newline="") as f:
+    with open(input_csv, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         required = {"quote", "page_number", "filename"}
         if not required.issubset(reader.fieldnames or []):
@@ -107,7 +117,7 @@ async def main_async():
         rows: List[Dict[str, str]] = list(reader)
 
     client = AsyncDedalus(api_key=api_key)
-    sem = asyncio.Semaphore(args.concurrency)
+    sem = asyncio.Semaphore(concurrency)
 
     # Simple cache so identical quotes don't cost extra
     cache: Dict[str, str] = {}
@@ -124,7 +134,7 @@ async def main_async():
             return
 
         async with sem:
-            idea = await synthesize_one(client, args.model, quote, args.rq)
+            idea = await synthesize_one(client, model, quote, rq)
             cache[qkey] = idea
             rows[i]["idea"] = idea
 
@@ -132,18 +142,48 @@ async def main_async():
 
     # Write output
     fieldnames = ["quote", "page_number", "filename", "idea"]
-    with open(output_csv, "w", encoding="utf-8", newline="") as f:
+    out_dir = os.path.dirname(os.path.abspath(out_csv))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    with open(out_csv, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for r in rows:
-            writer.writerow({
-                "quote": r.get("quote", ""),
-                "page_number": r.get("page_number", ""),
-                "filename": r.get("filename", ""),
-                "idea": r.get("idea", ""),
-            })
+            writer.writerow(
+                {
+                    "quote": r.get("quote", ""),
+                    "page_number": r.get("page_number", ""),
+                    "filename": r.get("filename", ""),
+                    "idea": r.get("idea", ""),
+                }
+            )
 
-    print(f"Wrote ideas to: {output_csv}")
+    print(f"Wrote ideas to: {out_csv}")
+    return out_csv
+
+
+# ----------------------------
+# CLI
+# ----------------------------
+async def main_async():
+    parser = argparse.ArgumentParser(description="Add synthesized 'idea' column to cleaned quote CSV.")
+    parser.add_argument("--input_csv", required=True, help="Path to cleaned CSV (quote,page_number,filename)")
+    parser.add_argument("--output_csv", default=None, help="Path to write output CSV (default: *_with_ideas.csv)")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Dedalus model identifier")
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY, help="Concurrent requests")
+    parser.add_argument("--rq", default=None, help="Optional research question context")
+    parser.add_argument("--in_place", action="store_true", help="Overwrite input CSV (not recommended)")
+    args = parser.parse_args()
+
+    await add_ideas_to_csv(
+        input_csv=args.input_csv,
+        output_csv=args.output_csv,
+        model=args.model,
+        concurrency=args.concurrency,
+        rq=args.rq,
+        in_place=args.in_place,
+    )
 
 
 def main():
