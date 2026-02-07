@@ -1,0 +1,1 @@
+[{"page": 1, "quote": "TNT [11] utilizes inner transformer and outer transformer to model word-level and sentence-level visual representations."}, {"page": 2, "quote": "A linear layer is applied to project the sub-patch into a visual word vector (a.k.a., token)."}, {"page": 6, "quote": "Attention is all you need."}]

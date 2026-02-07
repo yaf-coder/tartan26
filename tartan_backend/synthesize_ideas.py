@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import csv
+import json
 import os
 import re
 import time
@@ -12,10 +13,15 @@ from dedalus_labs import AsyncDedalus, RateLimitError
 # Load .env next to this file (bulletproof)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-DEFAULT_MODEL = "openai/gpt-4o-mini"
-# Stay under Dedalus 60 req/60s: throttle + low concurrency
-DEFAULT_CONCURRENCY = 2
-MIN_REQUEST_INTERVAL = 1.0
+# MODEL HANDOFF: Using gpt-4o (not gpt-4o-mini) for idea synthesis
+# Rationale: This task requires CONCISE, HIGH-QUALITY academic writing.
+# gpt-4o produces better prose and more nuanced summaries than gpt-4o-mini.
+# Worth the extra cost for the quality impact on the final literature review.
+DEFAULT_MODEL = "openai/gpt-4o"
+# Increased concurrency for much faster processing (5 -> 20)
+DEFAULT_CONCURRENCY = 20
+# Reduced rate limiting for faster throughput (1.0s -> 0.1s)
+MIN_REQUEST_INTERVAL = 0.1
 RATE_LIMIT_WAIT_SEC = 62
 
 _rate_lock = asyncio.Lock()
@@ -134,8 +140,20 @@ async def main_async():
     client = AsyncDedalus(api_key=api_key)
     sem = asyncio.Semaphore(args.concurrency)
 
-    # Simple cache so identical quotes don't cost extra
+    # Persistent cache
+    cache_dir = os.path.join(os.path.dirname(__file__), ".cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_file = os.path.join(cache_dir, "synthesis.json")
+    
     cache: Dict[str, str] = {}
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+        except Exception as e:
+            print(f"Error loading synthesis cache: {e}")
+
+    cache_lock = asyncio.Lock()
 
     async def worker(i: int):
         quote = rows[i].get("quote", "")
@@ -144,13 +162,16 @@ async def main_async():
             rows[i]["idea"] = ""
             return
 
-        if qkey in cache:
-            rows[i]["idea"] = cache[qkey]
-            return
+        async with cache_lock:
+            if qkey in cache:
+                rows[i]["idea"] = cache[qkey]
+                return
 
         async with sem:
+            print(f"[LOG] Synthesizing core idea for quote {i+1}/{len(rows)}...", flush=True)
             idea = await synthesize_one(client, args.model, quote, args.rq)
-            cache[qkey] = idea
+            async with cache_lock:
+                cache[qkey] = idea
             rows[i]["idea"] = idea
 
     await asyncio.gather(*(worker(i) for i in range(len(rows))))
@@ -169,6 +190,13 @@ async def main_async():
             })
 
     print(f"Wrote ideas to: {output_csv}")
+
+    # Save cache
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
+    except Exception as e:
+        print(f"Error saving synthesis cache: {e}")
 
 
 def main():

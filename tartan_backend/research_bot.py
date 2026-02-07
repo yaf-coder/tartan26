@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import csv
+import hashlib
 import json
 import os
 import re
@@ -19,16 +20,17 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), overrid
 # Defaults (override via CLI)
 # ----------------------------
 DEFAULT_MODEL = "openai/gpt-4o-mini"
-DEFAULT_MAX_QUOTES_PER_PDF = 20
-# Stay under Dedalus Free tier (60 req / 60 s): throttle + low concurrency
-DEFAULT_CONCURRENCY = 2
-DEFAULT_CHARS_PER_CHUNK = 12000
+# Reduced from 20 to 15 for faster processing
+DEFAULT_MAX_QUOTES_PER_PDF = 15
+# Bumping concurrency for faster parallel paper processing
+DEFAULT_CONCURRENCY = 3
+DEFAULT_CHARS_PER_CHUNK = 10_000
 DEFAULT_OUTPUT_NAME = "rq_quotes.csv"
 
 # Global rate limit: at most 1 request start per second (60/min)
 _rate_lock = asyncio.Lock()
 _last_request_time = 0.0
-MIN_REQUEST_INTERVAL = 1.0
+MIN_REQUEST_INTERVAL = 0.5
 RATE_LIMIT_WAIT_SEC = 62
 
 
@@ -228,17 +230,23 @@ async def process_pdf(
     model: str,
 ) -> List[Dict[str, Any]]:
     pages = extract_pdf_pages(pdf_path)
+    print(f"[LOG] Read {len(pages)} pages from {os.path.basename(pdf_path)}", flush=True)
     chunks = chunk_pages(pages, chars_per_chunk)
     if not chunks:
+        print(f"[LOG] No text content found in {os.path.basename(pdf_path)}", flush=True)
         return []
+    
+    print(f"[LOG] Analyzing {len(chunks)} text chunks for '{rq[:30]}...'", flush=True)
 
     per_chunk = max(3, max_quotes // max(1, len(chunks)))
 
     collected: List[Dict[str, Any]] = []
-    for ch in chunks:
+    for i, ch in enumerate(chunks):
+        print(f"[LOG] Extracting quotes from chunk {i+1}/{len(chunks)}...", flush=True)
         collected.extend(await extract_quotes_from_chunk(client, rq, ch, per_chunk, model))
 
     collected = dedupe_quotes(collected)
+    print(f"[LOG] Found {len(collected)} candidate quotes. Verifying against source text...", flush=True)
 
     verified: List[Dict[str, Any]] = []
     for q in collected:
@@ -248,6 +256,7 @@ async def process_pdf(
         verified.append({"page": p, "quote": q["quote"]})
 
     verified.sort(key=lambda x: (x["page"], -len(x["quote"])))
+    print(f"[LOG] Verified {len(verified)} quotes in {os.path.basename(pdf_path)}", flush=True)
     return verified[:max_quotes]
 
 
@@ -262,6 +271,10 @@ async def async_main():
     parser.add_argument("--chars_per_chunk", type=int, default=DEFAULT_CHARS_PER_CHUNK)
     parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output CSV filename.")
     args = parser.parse_args()
+
+    # Create cache directory
+    cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "papers")
+    os.makedirs(cache_dir, exist_ok=True)
 
     if os.getenv("DEDALUS_API_KEY") in (None, ""):
         raise SystemExit("DEDALUS_API_KEY is not set. Put it in .env or export it.")
@@ -287,6 +300,34 @@ async def async_main():
     rows: List[Dict[str, Any]] = []
 
     async def worker(path: str):
+        # Calculate hashes
+        pdf_hash = hashlib.sha256()
+        with open(path, "rb") as f:
+            while chunk := f.read(8192):
+                pdf_hash.update(chunk)
+        pdf_h = pdf_hash.hexdigest()
+        
+        rq_h = hashlib.sha256(args.rq.encode()).hexdigest()
+        cache_file = os.path.join(cache_dir, f"{pdf_h}_{rq_h}.json")
+
+        # Check cache
+        if os.path.exists(cache_file):
+            print(f"[LOG] Cache hit for {os.path.basename(path)}", flush=True)
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cached_quotes = json.load(f)
+                    for q in cached_quotes:
+                        rows.append(
+                            {
+                                "quote": q["quote"],
+                                "page_number": q["page"],
+                                "filename": os.path.basename(path),
+                            }
+                        )
+                    return
+            except Exception as e:
+                print(f"[LOG] Cache read error for {os.path.basename(path)}: {e}", flush=True)
+
         async with sem:
             quotes = await process_pdf(
                 client=client,
@@ -296,6 +337,14 @@ async def async_main():
                 chars_per_chunk=args.chars_per_chunk,
                 model=args.model,
             )
+            
+            # Save to cache
+            try:
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    json.dump(quotes, f)
+            except Exception as e:
+                print(f"[LOG] Cache write error for {os.path.basename(path)}: {e}", flush=True)
+
             for q in quotes:
                 rows.append(
                     {
