@@ -13,12 +13,13 @@
 }
 
 .source-card:hover {
-    border-color: hsl(var(--primary-hue), 60%, 65%);
-    box-shadow: 0 2px 8px hsla(var(--primary-hue), 40%, 40%, 0.08);
+    border-color: var(--color-primary-light);
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
 }
 
 .source-card--expanded {
-    border-color: hsl(var(--primary-hue), 60%, 65%);
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(17, 24, 39, 0.05);
 }
 
 /* Toggle button */
@@ -44,8 +45,8 @@
 .source-card__number {
     font-size: 0.75rem;
     font-weight: 700;
-    color: hsl(var(--primary-hue), 70%, 55%);
-    background: hsl(var(--primary-hue), 70%, 95%);
+    color: var(--color-text-primary);
+    background: var(--color-background-dark);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     flex-shrink: 0;
@@ -116,8 +117,8 @@
     display: inline-block;
     margin-bottom: 1rem;
     font-size: 0.8125rem;
-    font-weight: 500;
-    color: hsl(var(--primary-hue), 65%, 50%);
+    font-weight: 600;
+    color: var(--color-primary);
     text-decoration: none;
 }
 
@@ -149,12 +150,12 @@
 .source-card__quote {
     margin: 0;
     padding: 0.625rem 0.875rem;
-    background: hsl(220, 20%, 97%);
-    border-left: 2px solid hsl(var(--primary-hue), 65%, 60%);
+    background: var(--color-background-alt);
+    border-left: 2px solid var(--color-primary-light);
     border-radius: 4px;
     font-size: 0.875rem;
     line-height: 1.6;
-    color: hsl(220, 15%, 30%);
+    color: var(--color-text-secondary);
     font-style: italic;
 }
 

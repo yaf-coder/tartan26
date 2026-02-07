@@ -386,12 +386,12 @@ async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
             dedalus_client = AsyncDedalus(api_key=os.getenv("DEDALUS_API_KEY"))
             ranked_results = await rank_candidates(dedalus_client, query, all_candidates)
             
-            # DEBUGGING: Limit to 2 papers for faster testing
-            top_papers = ranked_results[:2]
+            # Production: Use up to 10 papers for comprehensive research
+            top_papers = ranked_results[:10]
             
             discarded = len(all_candidates) - len(top_papers)
             if len(top_papers) < 3:
-                yield json.dumps({"type": "log", "message": f"Note: Found {len(top_papers)} verified matches (limited for testing)."}) + "\n"
+                yield json.dumps({"type": "log", "message": f"Note: Found {len(top_papers)} verified matches."}) + "\n"
             else:
                 yield json.dumps({"type": "log", "message": f"Identified {len(top_papers)} highly relevant papers, discarded {discarded} domain-mismatches."}) + "\n"
             

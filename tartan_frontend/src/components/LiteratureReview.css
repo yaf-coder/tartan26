@@ -44,7 +44,7 @@
 }
 
 .literature-review__stat strong {
-    color: hsl(var(--primary-hue), 65%, 50%);
+    color: var(--color-primary);
     font-weight: 700;
 }
 
@@ -59,21 +59,21 @@
     gap: 1rem;
     width: 100%;
     padding: 1.25rem 1.5rem;
-    /* Explicit bright blue gradient that WILL be visible */
-    background: linear-gradient(135deg, #4F46E5, #6366F1) !important;
+    /* Grayscale gradient that matches the brand theme */
+    background: linear-gradient(135deg, var(--color-highlight-start), var(--color-highlight-end)) !important;
     color: white !important;
     border: none;
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.15);
     font-weight: 600;
 }
 
 .literature-review__report-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    background: linear-gradient(135deg, #4338CA, #4F46E5) !important;
-    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)) !important;
+    box-shadow: 0 6px 16px rgba(17, 24, 39, 0.25);
 }
 
 .literature-review__report-btn:disabled {
@@ -116,9 +116,9 @@
 /* Executive Summary */
 .literature-review__summary {
     padding: 1.5rem;
-    background: hsl(var(--primary-hue), 70%, 96%);
+    background: var(--color-background-alt);
     border-radius: 8px;
-    border: 1px solid hsl(var(--primary-hue), 60%, 88%);
+    border: 1px solid var(--color-border);
 }
 
 .literature-review__summary-header {
@@ -133,7 +133,7 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.5rem 0.875rem;
-    background: hsl(var(--primary-hue), 65%, 54%);
+    background: var(--color-primary);
     color: white;
     border: none;
     border-radius: 6px;
@@ -144,7 +144,8 @@
 }
 
 .literature-review__download-btn:hover:not(:disabled) {
-    background: hsl(var(--primary-hue), 70%, 50%);
+    background: var(--color-primary-light);
+    transform: translateY(-1px);
 }
 
 .literature-review__download-btn:disabled {
