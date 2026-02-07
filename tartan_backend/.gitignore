@@ -1,3 +1,4 @@
 .env
+*.txt
 *.csv
 *.pdf

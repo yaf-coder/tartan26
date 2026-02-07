@@ -3,16 +3,33 @@ import asyncio
 import csv
 import os
 import re
+import time
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
-from dedalus_labs import AsyncDedalus
+from dedalus_labs import AsyncDedalus, RateLimitError
 
 # Load .env next to this file (bulletproof)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 DEFAULT_MODEL = "openai/gpt-4o-mini"
-DEFAULT_CONCURRENCY = 12
+# Stay under Dedalus 60 req/60s: throttle + low concurrency
+DEFAULT_CONCURRENCY = 2
+MIN_REQUEST_INTERVAL = 1.0
+RATE_LIMIT_WAIT_SEC = 62
+
+_rate_lock = asyncio.Lock()
+_last_request_time = 0.0
+
+
+async def _throttle() -> None:
+    global _last_request_time
+    async with _rate_lock:
+        now = time.monotonic()
+        wait = _last_request_time + MIN_REQUEST_INTERVAL - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_request_time = time.monotonic()
 
 
 SYSTEM = (
@@ -45,14 +62,22 @@ Constraints:
 - One sentence only.
 """.strip()
 
-    resp = await client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": user},
-        ],
-    )
-
+    for attempt in range(1, 4):
+        await _throttle()
+        try:
+            resp = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM},
+                    {"role": "user", "content": user},
+                ],
+            )
+            break
+        except RateLimitError:
+            if attempt < 3:
+                await asyncio.sleep(RATE_LIMIT_WAIT_SEC)
+            else:
+                raise
     try:
         text = resp.choices[0].message.content
     except Exception:

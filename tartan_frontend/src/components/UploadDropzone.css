@@ -1,0 +1,183 @@
+/**
+ * =============================================================================
+ * UPLOAD DROPZONE STYLES
+ * =============================================================================
+ */
+
+.upload-dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* Label */
+.upload-dropzone__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+}
+
+/* Drop zone area */
+.upload-dropzone__zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-8) var(--space-4);
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-background-alt);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.upload-dropzone__zone:hover:not(.upload-dropzone__zone--disabled) {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary-subtle);
+}
+
+.upload-dropzone__zone--drag-over {
+    border-color: var(--color-primary);
+    border-style: solid;
+    background-color: var(--color-primary-subtle);
+}
+
+.upload-dropzone__zone--disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Upload icon */
+.upload-dropzone__icon {
+    color: var(--color-text-muted);
+}
+
+.upload-dropzone__zone:hover:not(.upload-dropzone__zone--disabled) .upload-dropzone__icon,
+.upload-dropzone__zone--drag-over .upload-dropzone__icon {
+    color: var(--color-primary);
+}
+
+/* Text content */
+.upload-dropzone__text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: 0;
+}
+
+.upload-dropzone__text-primary {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+}
+
+.upload-dropzone__text-secondary {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.upload-dropzone__hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-bottom: 0;
+}
+
+/* Hidden file input */
+.upload-dropzone__input {
+    display: none;
+}
+
+/* Error message */
+.upload-dropzone__error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-error);
+    background-color: var(--color-error-subtle);
+    border-radius: var(--radius-md);
+}
+
+/* Files section */
+.upload-dropzone__files {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.upload-dropzone__files-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+}
+
+.upload-dropzone__file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* Individual file item */
+.upload-dropzone__file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background-color: var(--color-background-alt);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: 0;
+}
+
+.upload-dropzone__file-icon {
+    flex-shrink: 0;
+    color: var(--color-primary);
+}
+
+.upload-dropzone__file-info {
+    flex: 1;
+    min-width: 0;
+    /* Allow text truncation */
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.upload-dropzone__file-name {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upload-dropzone__file-size {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.upload-dropzone__file-remove {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background-color: transparent;
+    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.upload-dropzone__file-remove:hover:not(:disabled) {
+    background-color: var(--color-error-subtle);
+    color: var(--color-error);
+}
