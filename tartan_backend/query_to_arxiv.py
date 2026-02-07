@@ -13,9 +13,11 @@ from dedalus_labs import AsyncDedalus
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 SYSTEM = (
-    "You convert research questions into arXiv search queries. "
-    "arXiv works best with concise academic keywords (topics, terms, species names, etc.). "
-    "Output ONLY the search query: 3-8 words or one short phrase, no quotes, no explanation."
+    "You convert research questions into precise arXiv search queries. "
+    "arXiv works best with technical terms joined by boolean operators (AND, OR). "
+    "STRATEGY: Always expand acronyms. Use a multi-part query: (Full Name OR Acronym) AND Technical Keywords. "
+    "Example for PFAS: (\"Per- and polyfluoroalkyl substances\" OR PFAS) AND chemistry. "
+    "Output ONLY the search query, no quotes, no explanation."
 )
 
 

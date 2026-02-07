@@ -67,8 +67,10 @@ Task: Write one short paragraph summarizing what this evidence shows regarding t
         return
 
     client = AsyncDedalus(api_key=api_key)
+    # TEMPORARILY using gpt-4o instead of Claude due to Dedalus API issues
+    # TODO: Switch back to claude-3-5-sonnet-20241022 once API is fixed
     resp = await client.chat.completions.create(
-        model="openai/gpt-4o-mini",
+        model="openai/gpt-4o",
         messages=[
             {"role": "system", "content": SUMMARY_SYSTEM},
             {"role": "user", "content": user},
