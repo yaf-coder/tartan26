@@ -132,6 +132,15 @@ function App() {
       case 'idle':
         return (
           <div className="app__input-section">
+            {/* Trust badges */}
+            <div className="app__trust-badges">
+              <span className="app__trust-badge">Every claim is cited</span>
+              <span className="app__trust-separator">•</span>
+              <span className="app__trust-badge">Every quote is traceable</span>
+              <span className="app__trust-separator">•</span>
+              <span className="app__trust-badge">Every conclusion is verifiable</span>
+            </div>
+
             {/* Chat input */}
             <ChatInput onSubmit={handleSubmit} disabled={false} />
 
@@ -211,10 +220,8 @@ function App() {
       <header className="app__hero">
         <div className="app__hero-content">
           <p className="app__tagline">Hallucination-proof research</p>
-          <h1 className="app__title">Literature Review Assistant</h1>
-          <p className="app__subtitle">
-            Every claim is cited. Every quote is traceable. No hallucinations.
-          </p>
+          <h1 className="app__title">Veritas</h1>
+          <p className="app__subtitle-brand">the truth agent</p>
         </div>
       </header>
 
