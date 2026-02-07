@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 import arxiv
 from dedalus_labs import AsyncDedalus
+from tartan_backend.core_api import CoreApiClient, download_outputs_to_dir
 from tartan_backend.semantic_scholar import SemanticScholarClient
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -336,80 +337,89 @@ async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
             if filename and filename.lower().endswith(".pdf"):
                 (papers_dir / (filename or "upload.pdf")).write_bytes(content)
 
-        # Step 1: Finding sources
+        # Step 1: Finding sources — aim for up to MAX_SOURCES total (uploaded PDFs + CORE, fallback arXiv/Semantic Scholar)
+        MAX_SOURCES = 1
         yield emit("finding-sources")
         pdfs = list(papers_dir.glob("*.pdf"))
-        if not pdfs:
-            yield json.dumps({"type": "log", "message": f"Global research query: {query}"}) + "\n"
-            
+        num_uploaded = len(pdfs)
+        need_remote = max(0, MAX_SOURCES - num_uploaded)
+
+        if need_remote > 0:
+            if num_uploaded:
+                yield json.dumps({"type": "log", "message": f"Using {num_uploaded} uploaded PDF(s), fetching up to {need_remote} more from CORE."}) + "\n"
+            else:
+                yield json.dumps({"type": "log", "message": f"Global research query: {query}"}) + "\n"
+
             try:
                 print(f"[DEBUG] Starting query conversion for: {query}", flush=True)
-                arxiv_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
-                print(f"[DEBUG] Query converted to: {arxiv_query}", flush=True)
-                yield json.dumps({"type": "log", "message": f"Searching arXiv and Semantic Scholar for: {arxiv_query}"}) + "\n"
+                search_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
+                print(f"[DEBUG] Query converted to: {search_query}", flush=True)
+                yield json.dumps({"type": "log", "message": f"Searching CORE for: {search_query}"}) + "\n"
             except Exception as e:
                 print(f"[ERROR] Query conversion failed: {e}", flush=True)
-                arxiv_query = query  # Fallback to original query
-                yield json.dumps({"type": "log", "message": f"Using original query: {arxiv_query}"}) + "\n"
-            
-            # 1. Broad Scanning: arXiv
-            try:
-                print(f"[DEBUG] Searching arXiv...", flush=True)
-                search = arxiv.Search(query=arxiv_query, max_results=50)
-                arxiv_client = arxiv.Client(page_size=50)
-                arxiv_results = list(arxiv_client.results(search))
-                print(f"[DEBUG] Found {len(arxiv_results)} arXiv results", flush=True)
-            except Exception as e:
-                print(f"[ERROR] arXiv search failed: {e}", flush=True)
-                arxiv_results = []
-            
-            # 2. Broad Scanning: Semantic Scholar
-            try:
-                print(f"[DEBUG] Searching Semantic Scholar...", flush=True)
-                ss_client = SemanticScholarClient()
-                ss_results = await asyncio.to_thread(ss_client.search_papers, arxiv_query, limit=50)
-                ss_oa_results = [r for r in ss_results if r.get("openAccessPdf")]
-                print(f"[DEBUG] Found {len(ss_oa_results)} Semantic Scholar OA results", flush=True)
-            except Exception as e:
-                print(f"[ERROR] Semantic Scholar search failed: {e}", flush=True)
-                ss_oa_results = []
-            
-            all_candidates = arxiv_results + ss_oa_results
-            
-            if not all_candidates:
-                yield json.dumps({"type": "error", "detail": "No open-access papers found across all databases."}) + "\n"
-                return
+                search_query = query
+                yield json.dumps({"type": "log", "message": f"Using original query: {search_query}"}) + "\n"
 
-            yield json.dumps({"type": "log", "message": f"Scanning {len(all_candidates)} candidates across multiple databases..."}) + "\n"
-            
-            # Rank candidates (Unified)
             dedalus_client = AsyncDedalus(api_key=os.getenv("DEDALUS_API_KEY"))
-            ranked_results = await rank_candidates(dedalus_client, query, all_candidates)
-            
-            # DEBUGGING: Limit to 2 papers for faster testing
-            top_papers = ranked_results[:2]
-            
-            discarded = len(all_candidates) - len(top_papers)
-            if len(top_papers) < 3:
-                yield json.dumps({"type": "log", "message": f"Note: Found {len(top_papers)} verified matches (limited for testing)."}) + "\n"
-            else:
-                yield json.dumps({"type": "log", "message": f"Identified {len(top_papers)} highly relevant papers, discarded {discarded} domain-mismatches."}) + "\n"
-            
-            if not top_papers:
-                yield json.dumps({"type": "log", "message": "No verified matches found. Specialized niche research may be sparse."}) + "\n"
-                yield json.dumps({"type": "error", "detail": "All found papers were deemed irrelevant points. Try broader technical keywords."}) + "\n"
-                return
+            core_client = CoreApiClient()
+            use_core = bool(core_client.api_key)
 
-            yield json.dumps({"type": "log", "message": f"Downloading {len(top_papers)} verified sources..."}) + "\n"
-            await download_papers(str(papers_dir), top_papers)
-            
+            if use_core:
+                try:
+                    core_results = await asyncio.to_thread(core_client.search_outputs, search_query, limit=min(100, need_remote * 50))
+                    for r in core_results:
+                        if not r.get("abstract") and r.get("description"):
+                            r["abstract"] = r["description"]
+                    print(f"[DEBUG] Found {len(core_results)} CORE results", flush=True)
+                except Exception as e:
+                    print(f"[ERROR] CORE search failed: {e}", flush=True)
+                    core_results = []
+            else:
+                core_results = []
+                yield json.dumps({"type": "log", "message": "CORE_API_KEY not set, using arXiv and Semantic Scholar."}) + "\n"
+
+            if core_results:
+                yield json.dumps({"type": "log", "message": f"Ranking {len(core_results)} candidates..."}) + "\n"
+                ranked_results = await rank_candidates(dedalus_client, query, core_results)
+                top_papers = ranked_results[:need_remote]
+                if top_papers:
+                    yield json.dumps({"type": "log", "message": f"Downloading {len(top_papers)} source(s) from CORE..."}) + "\n"
+                    await asyncio.to_thread(download_outputs_to_dir, core_client, top_papers, str(papers_dir), max_downloads=need_remote)
+
             pdfs = list(papers_dir.glob("*.pdf"))
-            if not pdfs:
-                yield json.dumps({"type": "error", "detail": "PDF download failed for selected papers (may be restricted Access)."}) + "\n"
+            # Fallback to arXiv + Semantic Scholar if CORE returned no PDFs
+            if not pdfs and need_remote > 0:
+                yield json.dumps({"type": "log", "message": "Trying arXiv and Semantic Scholar as fallback..."}) + "\n"
+                try:
+                    arxiv_client = arxiv.Client(page_size=50)
+                    search = arxiv.Search(query=search_query, max_results=50)
+                    arxiv_results = list(arxiv_client.results(search))
+                    ss_results = []
+                    try:
+                        ss_client = SemanticScholarClient()
+                        ss_results = await asyncio.to_thread(ss_client.search_papers, search_query, limit=50)
+                        ss_results = [r for r in ss_results if r.get("openAccessPdf")]
+                    except Exception:
+                        pass
+                    all_candidates = arxiv_results + ss_results
+                    if all_candidates:
+                        ranked_results = await rank_candidates(dedalus_client, query, all_candidates)
+                        top_papers = ranked_results[:need_remote]
+                        if top_papers:
+                            await download_papers(str(papers_dir), top_papers)
+                except Exception as e:
+                    print(f"[ERROR] arXiv/Semantic Scholar fallback failed: {e}", flush=True)
+                pdfs = list(papers_dir.glob("*.pdf"))
+
+            if num_uploaded and not pdfs:
+                yield json.dumps({"type": "error", "detail": "Uploaded PDFs could not be read."}) + "\n"
+                return
+            if not num_uploaded and not pdfs:
+                yield json.dumps({"type": "error", "detail": "No PDFs could be downloaded (CORE and fallback). Set CORE_API_KEY or try different keywords."}) + "\n"
                 return
             yield json.dumps({"type": "log", "message": f"Successfully prepared {len(pdfs)} papers for analysis."}) + "\n"
         else:
-            yield json.dumps({"type": "log", "message": f"Using {len(pdfs)} uploaded PDF(s) as sources"}) + "\n"
+            yield json.dumps({"type": "log", "message": f"Using {len(pdfs)} uploaded PDF(s) as sources."}) + "\n"
 
         # Step 2: Extracting quotes (run_pipeline: research_bot, clean, merge, synthesize)
         yield emit("extracting-quotes")

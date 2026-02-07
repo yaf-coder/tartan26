@@ -5,7 +5,7 @@ Frontend (React + Vite) and backend (Python research pipeline) for literature re
 ## Run the full stack
 
 1. **Backend (API + pipeline)**  
-   From the **project root** (`tartan26/`), with a virtualenv that has the backend deps and `DEDALUS_API_KEY` set (e.g. in `tartan_backend/.env`):
+   From the **project root** (`tartan26/`), with a virtualenv that has the backend deps. Set in `tartan_backend/.env`: `DEDALUS_API_KEY` (required for ranking and summary). For question-only research, set **CORE_API_KEY** (get one at [core.ac.uk/api-keys/register](https://core.ac.uk/api-keys/register)) to use CORE first; if unset or CORE returns no PDFs, the app falls back to **arXiv** and **Semantic Scholar**.
 
    ```bash
    cd /path/to/tartan26
