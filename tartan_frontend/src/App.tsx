@@ -33,7 +33,7 @@ import {
 } from './components';
 
 // API
-import { submitResearch, getPaperDownloadUrl } from './api';
+import { submitResearchStream, getPaperDownloadUrl } from './api';
 
 // Styles
 import './App.css';
@@ -41,17 +41,6 @@ import './App.css';
 // -----------------------------------------------------------------------------
 // CONSTANTS
 // -----------------------------------------------------------------------------
-
-/** Duration for each loading step (in milliseconds) */
-const STEP_DURATION = 1500;
-
-/** All loading steps in order */
-const LOADING_STEPS: LoadingStep[] = [
-  'finding-sources',
-  'extracting-quotes',
-  'cross-checking',
-  'compiling',
-];
 
 // -----------------------------------------------------------------------------
 // MAIN APP COMPONENT
@@ -106,30 +95,26 @@ function App() {
     setAppState('loading');
     setCurrentStep('finding-sources');
 
-    // Animate through steps while request is in flight
-    let stepIndex = 0;
-    const stepInterval = setInterval(() => {
-      stepIndex++;
-      if (stepIndex < LOADING_STEPS.length) {
-        setCurrentStep(LOADING_STEPS[stepIndex]);
-      } else {
-        clearInterval(stepInterval);
-      }
-    }, STEP_DURATION);
-
     try {
-      const result = await submitResearch(submittedQuery.trim(), pdfFiles);
-      clearInterval(stepInterval);
-      setCurrentStep('compiling');
-      setSources(result.sources);
-      setSummary(result.summary);
-      setSourceFiles(result.source_files ?? []);
-      setAppState('results');
-      if ((result.source_files?.length ?? 0) > 0) {
-        setShowSourceFilesPopup(true);
-      }
+      await submitResearchStream(submittedQuery.trim(), pdfFiles, {
+        onStep(step) {
+          setCurrentStep(step);
+        },
+        onResult(result) {
+          setSources(result.sources);
+          setSummary(result.summary);
+          setSourceFiles(result.source_files ?? []);
+          setAppState('results');
+          if ((result.source_files?.length ?? 0) > 0) {
+            setShowSourceFilesPopup(true);
+          }
+        },
+        onError(message) {
+          setErrorMessage(message);
+          setAppState('error');
+        },
+      });
     } catch (err) {
-      clearInterval(stepInterval);
       setErrorMessage(err instanceof Error ? err.message : 'Research request failed.');
       setAppState('error');
     }

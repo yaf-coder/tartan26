@@ -3,7 +3,7 @@
  * VITE_API_URL defaults to http://localhost:8000 (set in .env for production).
  */
 
-import type { Source } from './types';
+import type { LoadingStep, Source } from './types';
 
 // In dev, use relative URL so Vite proxy forwards /api to the backend
 const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '';
@@ -17,16 +17,25 @@ export interface ResearchResponse {
 
 /** URL to download a source paper PDF by filename */
 export function getPaperDownloadUrl(filename: string): string {
-  const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '';
   const base = API_BASE || '';
   return `${base}/api/papers/${encodeURIComponent(filename)}`;
 }
 
+export interface ResearchStreamCallbacks {
+  onStep: (step: LoadingStep) => void;
+  onResult: (data: ResearchResponse) => void;
+  onError: (message: string) => void;
+}
+
 /**
- * Submit a research query to the backend. Optionally include PDF files as sources.
- * If no files are sent, the backend will search for papers (e.g. arXiv) to answer the question.
+ * Submit research and consume the NDJSON stream: progress steps then result.
+ * Calls onStep(step) for each progress event, onResult(data) when done, or onError(message) on failure.
  */
-export async function submitResearch(query: string, files: File[] = []): Promise<ResearchResponse> {
+export async function submitResearchStream(
+  query: string,
+  files: File[],
+  callbacks: ResearchStreamCallbacks
+): Promise<void> {
   const formData = new FormData();
   formData.append('query', query.trim());
   for (const file of files) {
@@ -42,8 +51,82 @@ export async function submitResearch(query: string, files: File[] = []): Promise
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const message = (body.detail as string) || res.statusText || 'Research request failed';
-    throw new Error(message);
+    callbacks.onError(message);
+    return;
   }
 
-  return res.json() as Promise<ResearchResponse>;
+  const reader = res.body?.getReader();
+  if (!reader) {
+    callbacks.onError('No response body');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const obj = JSON.parse(trimmed) as {
+            type: string;
+            step?: string;
+            detail?: string;
+            sources?: Source[];
+            summary?: string;
+            source_files?: string[];
+          };
+          if (obj.type === 'step' && obj.step) {
+            callbacks.onStep(obj.step as LoadingStep);
+          } else if (obj.type === 'result') {
+            callbacks.onResult({
+              sources: obj.sources ?? [],
+              summary: obj.summary ?? '',
+              source_files: obj.source_files ?? [],
+            });
+            return;
+          } else if (obj.type === 'error' && obj.detail) {
+            callbacks.onError(obj.detail);
+            return;
+          }
+        } catch {
+          // ignore malformed lines
+        }
+      }
+    }
+    if (buffer.trim()) {
+      try {
+        const obj = JSON.parse(buffer.trim()) as {
+          type: string;
+          detail?: string;
+          sources?: Source[];
+          summary?: string;
+          source_files?: string[];
+        };
+        if (obj.type === 'result') {
+          callbacks.onResult({
+            sources: obj.sources ?? [],
+            summary: obj.summary ?? '',
+            source_files: obj.source_files ?? [],
+          });
+          return;
+        }
+        if (obj.type === 'error' && obj.detail) {
+          callbacks.onError(obj.detail);
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    callbacks.onError('Incomplete response');
+  } finally {
+    reader.releaseLock();
+  }
 }

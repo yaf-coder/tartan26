@@ -1,9 +1,11 @@
 """
 Veritas API – connects the frontend to the research pipeline.
 POST /api/research: research query (required); optional PDF files as additional sources.
-If no files are sent, the API searches arXiv and downloads papers for the question.
+Streams progress steps (NDJSON) then the final result so the frontend can sync the timeline.
 """
+import asyncio
 import csv
+import json
 import os
 import shutil
 import subprocess
@@ -14,7 +16,7 @@ from pathlib import Path
 import arxiv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 # Paths
 ROOT = Path(__file__).resolve().parent
@@ -179,6 +181,75 @@ def download_paper(filename: str):
     return FileResponse(path, filename=filename, media_type="application/pdf")
 
 
+async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
+    """Async generator: yield NDJSON progress steps then the final result."""
+    tmp = tempfile.mkdtemp(prefix="veritas_")
+    try:
+        papers_dir = Path(tmp) / "papers"
+        csv_dir = Path(tmp) / "csvs"
+        papers_dir.mkdir()
+        csv_dir.mkdir()
+
+        for filename, content in files_data:
+            if filename and filename.lower().endswith(".pdf"):
+                (papers_dir / (filename or "upload.pdf")).write_bytes(content)
+
+        def emit(step: str) -> str:
+            return json.dumps({"type": "step", "step": step}) + "\n"
+
+        # Step 1: Finding sources
+        yield emit("finding-sources")
+        pdfs = list(papers_dir.glob("*.pdf"))
+        if not pdfs:
+            arxiv_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
+            await asyncio.to_thread(fetch_papers_from_arxiv, str(papers_dir), arxiv_query, 5)
+            pdfs = list(papers_dir.glob("*.pdf"))
+            if not pdfs:
+                yield json.dumps({"type": "error", "detail": "No papers could be found for this question. Try uploading PDFs as sources."}) + "\n"
+                return
+
+        # Step 2: Extracting quotes (run_pipeline: research_bot, clean, merge, synthesize)
+        yield emit("extracting-quotes")
+        output_csv = str(csv_dir / "all_quotes.csv")
+        try:
+            csv_path = await asyncio.to_thread(
+                run_pipeline,
+                str(papers_dir),
+                str(csv_dir),
+                output_csv,
+                query,
+            )
+        except HTTPException as e:
+            yield json.dumps({"type": "error", "detail": e.detail}) + "\n"
+            return
+
+        # Step 3: Cross-checking (done after pipeline)
+        yield emit("cross-checking")
+        await asyncio.sleep(0.1)
+
+        # Step 4: Compiling (run_summary)
+        yield emit("compiling")
+        summary = await asyncio.to_thread(run_summary, csv_path, query)
+        sources = csv_to_sources(csv_path)
+
+        persistent_papers = (BACKEND / "papers").resolve()
+        persistent_papers.mkdir(parents=True, exist_ok=True)
+        source_files = []
+        for pdf in sorted(papers_dir.glob("*.pdf")):
+            dest = persistent_papers / pdf.name
+            shutil.copy2(str(pdf), str(dest))
+            source_files.append(pdf.name)
+
+        yield json.dumps({
+            "type": "result",
+            "sources": sources,
+            "summary": summary,
+            "source_files": source_files,
+        }) + "\n"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 @app.post("/api/research")
 async def research(
     query: str = Form(..., description="Research question"),
@@ -187,54 +258,18 @@ async def research(
     if not query or not query.strip():
         raise HTTPException(status_code=400, detail="Query is required.")
 
-    with tempfile.TemporaryDirectory(prefix="veritas_") as tmp:
-        papers_dir = Path(tmp) / "papers"
-        csv_dir = Path(tmp) / "csvs"
-        papers_dir.mkdir()
-        csv_dir.mkdir()
+    files_data: list[tuple[str, bytes]] = []
+    for f in files or []:
+        if f.filename and f.filename.lower().endswith(".pdf"):
+            content = await f.read()
+            files_data.append((f.filename or "upload.pdf", content))
 
-        # Optional: save uploaded PDFs as sources
-        for f in files or []:
-            if f.filename and f.filename.lower().endswith(".pdf"):
-                path = papers_dir / (f.filename or "upload.pdf")
-                content = await f.read()
-                path.write_bytes(content)
+    async def stream():
+        async for chunk in _stream_research(query.strip(), files_data):
+            yield chunk.encode("utf-8")
 
-        pdfs = list(papers_dir.glob("*.pdf"))
-        if not pdfs:
-            # No files: convert question to arXiv search query, then search and download papers
-            arxiv_query = user_query_to_arxiv_search(query.strip())
-            fetch_papers_from_arxiv(str(papers_dir), arxiv_query, max_results=5)
-            pdfs = list(papers_dir.glob("*.pdf"))
-            if not pdfs:
-                raise HTTPException(
-                    status_code=503,
-                    detail="No papers could be found for this question. Try uploading PDFs as sources.",
-                )
-
-        output_csv = str(csv_dir / "all_quotes.csv")
-        csv_path = run_pipeline(
-            papers_dir=str(papers_dir),
-            csv_dir=str(csv_dir),
-            output_csv=output_csv,
-            rq=query.strip(),
-        )
-        summary = run_summary(csv_path, query.strip())
-        sources = csv_to_sources(csv_path)
-
-        # Persist PDFs to tartan_backend/papers (absolute path so they always land on disk)
-        persistent_papers = (BACKEND / "papers").resolve()
-        persistent_papers.mkdir(parents=True, exist_ok=True)
-        source_files: list[str] = []
-        for pdf in sorted(papers_dir.glob("*.pdf")):
-            dest = persistent_papers / pdf.name
-            try:
-                shutil.copy2(str(pdf), str(dest))
-                source_files.append(pdf.name)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to save paper {pdf.name}: {e}",
-                )
-
-    return {"sources": sources, "summary": summary, "source_files": source_files}
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store"},
+    )
