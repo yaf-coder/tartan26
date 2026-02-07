@@ -1,23 +1,15 @@
+import argparse
+import csv
 import os
 import re
-import csv
 from typing import Optional
 
 from pypdf import PdfReader
 
 
-# ----------------------------
-# EDIT THESE
-# ----------------------------
-CSV_FOLDER = "./csvs"
-PDF_FOLDER = "./pdfs"
-
-
-# ----------------------------
-# Helpers
-# ----------------------------
 def norm(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
+
 
 def resolve_pdf_path(pdf_folder: str, filename: str) -> Optional[str]:
     if not filename:
@@ -34,6 +26,7 @@ def resolve_pdf_path(pdf_folder: str, filename: str) -> Optional[str]:
 
     return None
 
+
 def read_page_text(pdf_path: str, page_number_1indexed: int) -> str:
     reader = PdfReader(pdf_path)
     idx = page_number_1indexed - 1
@@ -44,6 +37,7 @@ def read_page_text(pdf_path: str, page_number_1indexed: int) -> str:
     except Exception:
         return ""
 
+
 def quote_exists_on_page(quote: str, page_text: str) -> bool:
     q = norm(quote)
     p = norm(page_text)
@@ -51,11 +45,10 @@ def quote_exists_on_page(quote: str, page_text: str) -> bool:
     if not q or not p:
         return False
 
-    # strict normalized match
     if q in p:
         return True
 
-    # relaxed prefix match for PDF extraction artifacts
+    # relaxed prefix match for extraction artifacts
     if len(q) >= 60:
         prefix = q[:120]
         if prefix in p:
@@ -64,9 +57,6 @@ def quote_exists_on_page(quote: str, page_text: str) -> bool:
     return False
 
 
-# ----------------------------
-# Core logic
-# ----------------------------
 def clean_csv_in_place(csv_path: str, pdf_folder: str):
     kept_rows = []
     total = 0
@@ -91,44 +81,47 @@ def clean_csv_in_place(csv_path: str, pdf_folder: str):
 
             page_text = read_page_text(pdf_path, page_num)
             if quote_exists_on_page(quote, page_text):
-                kept_rows.append({
-                    "quote": quote,
-                    "page_number": page_num,
-                    "filename": filename
-                })
+                kept_rows.append(
+                    {
+                        "quote": quote,
+                        "page_number": page_num,
+                        "filename": filename,
+                    }
+                )
 
-    # Overwrite original CSV
+    # Overwrite original CSV (destructive)
     with open(csv_path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=["quote", "page_number", "filename"]
-        )
+        writer = csv.DictWriter(f, fieldnames=["quote", "page_number", "filename"])
         writer.writeheader()
         writer.writerows(kept_rows)
 
-    print(
-        f"{os.path.basename(csv_path)} | "
-        f"kept {len(kept_rows)}/{total} rows"
-    )
+    print(f"{os.path.basename(csv_path)} | kept {len(kept_rows)}/{total} rows")
 
 
 def main():
-    if not os.path.isdir(CSV_FOLDER):
-        raise SystemExit(f"CSV folder not found: {CSV_FOLDER}")
-    if not os.path.isdir(PDF_FOLDER):
-        raise SystemExit(f"PDF folder not found: {PDF_FOLDER}")
+    parser = argparse.ArgumentParser(description="Clean quote CSVs in place by verifying quotes in PDFs.")
+    parser.add_argument("--csv_dir", default="./csvs", help="Folder containing quote CSVs.")
+    parser.add_argument("--papers_dir", default="./papers", help="Folder containing PDFs referenced by filename.")
+    args = parser.parse_args()
+
+    csv_folder = args.csv_dir
+    pdf_folder = args.papers_dir
+
+    if not os.path.isdir(csv_folder):
+        raise SystemExit(f"CSV folder not found: {csv_folder}")
+    if not os.path.isdir(pdf_folder):
+        raise SystemExit(f"PDF folder not found: {pdf_folder}")
 
     csv_files = [
-        os.path.join(CSV_FOLDER, f)
-        for f in os.listdir(CSV_FOLDER)
+        os.path.join(csv_folder, f)
+        for f in os.listdir(csv_folder)
         if f.lower().endswith(".csv")
     ]
-
     if not csv_files:
-        raise SystemExit(f"No CSV files found in: {CSV_FOLDER}")
+        raise SystemExit(f"No CSV files found in: {csv_folder}")
 
     for csv_path in sorted(csv_files):
-        clean_csv_in_place(csv_path, PDF_FOLDER)
+        clean_csv_in_place(csv_path, pdf_folder)
 
 
 if __name__ == "__main__":

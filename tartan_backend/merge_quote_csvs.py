@@ -1,12 +1,6 @@
-import os
+import argparse
 import csv
-
-# ----------------------------
-# EDIT THESE
-# ----------------------------
-CSV_FOLDER = "./csvs"
-OUTPUT_CSV = "./all_quotes.csv"
-DEDUPLICATE = True   # set False if you want raw concatenation
+import os
 
 
 def normalize(s: str) -> str:
@@ -14,17 +8,26 @@ def normalize(s: str) -> str:
 
 
 def main():
-    if not os.path.isdir(CSV_FOLDER):
-        raise SystemExit(f"CSV folder not found: {CSV_FOLDER}")
+    parser = argparse.ArgumentParser(description="Merge quote CSVs into one big CSV.")
+    parser.add_argument("--csv_dir", default="./csvs", help="Folder containing cleaned CSVs.")
+    parser.add_argument("--output_csv", default="./all_quotes.csv", help="Output merged CSV path.")
+    parser.add_argument("--no-dedupe", action="store_true", help="Do not deduplicate identical quotes.")
+    args = parser.parse_args()
+
+    csv_folder = args.csv_dir
+    output_csv = args.output_csv
+    dedupe = not args.no_dedupe
+
+    if not os.path.isdir(csv_folder):
+        raise SystemExit(f"CSV folder not found: {csv_folder}")
 
     csv_files = [
-        os.path.join(CSV_FOLDER, f)
-        for f in os.listdir(CSV_FOLDER)
+        os.path.join(csv_folder, f)
+        for f in os.listdir(csv_folder)
         if f.lower().endswith(".csv")
     ]
-
     if not csv_files:
-        raise SystemExit(f"No CSV files found in: {CSV_FOLDER}")
+        raise SystemExit(f"No CSV files found in: {csv_folder}")
 
     all_rows = []
     seen_quotes = set()
@@ -33,7 +36,6 @@ def main():
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
 
-            # sanity check
             required = {"quote", "page_number", "filename"}
             if not required.issubset(reader.fieldnames or []):
                 print(f"Skipping {os.path.basename(path)} (invalid schema)")
@@ -47,31 +49,20 @@ def main():
                 if not quote or not page or not fname:
                     continue
 
-                if DEDUPLICATE:
+                if dedupe:
                     key = normalize(quote).lower()
                     if key in seen_quotes:
                         continue
                     seen_quotes.add(key)
 
-                all_rows.append({
-                    "quote": quote,
-                    "page_number": page,
-                    "filename": fname
-                })
+                all_rows.append({"quote": quote, "page_number": page, "filename": fname})
 
-    # write merged CSV
-    with open(OUTPUT_CSV, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=["quote", "page_number", "filename"]
-        )
+    with open(output_csv, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["quote", "page_number", "filename"])
         writer.writeheader()
         writer.writerows(all_rows)
 
-    print(
-        f"Merged {len(csv_files)} CSVs → {OUTPUT_CSV} "
-        f"({len(all_rows)} total quotes)"
-    )
+    print(f"Merged {len(csv_files)} CSVs → {output_csv} ({len(all_rows)} total quotes)")
 
 
 if __name__ == "__main__":
