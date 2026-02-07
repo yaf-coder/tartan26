@@ -22,7 +22,7 @@
 import { useState, useCallback } from 'react';
 
 // Types
-import type { AppState, LoadingStep, Source, UploadedFile } from './types';
+import type { AppState, LoadingStep, Source, UploadedFile, ThinkingLog } from './types';
 
 // Components
 import {
@@ -66,12 +66,16 @@ function App() {
   /** Results: sources and summary from the API */
   const [sources, setSources] = useState<Source[]>([]);
   const [summary, setSummary] = useState('');
+  const [literatureReview, setLiteratureReview] = useState('');
 
   /** Error message when request fails */
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /** Names of source PDF files from the last research (for popup + download) */
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
+
+  /** Real-time thinking logs from the backend */
+  const [thinkingLogs, setThinkingLogs] = useState<ThinkingLog[]>([]);
 
   /** Whether to show the source files popup */
   const [showSourceFilesPopup, setShowSourceFilesPopup] = useState(false);
@@ -94,15 +98,20 @@ function App() {
 
     setAppState('loading');
     setCurrentStep('finding-sources');
+    setThinkingLogs([]);
 
     try {
       await submitResearchStream(submittedQuery.trim(), pdfFiles, {
         onStep(step) {
           setCurrentStep(step);
         },
+        onLog(log) {
+          setThinkingLogs((prev) => [...prev, log]);
+        },
         onResult(result) {
           setSources(result.sources);
           setSummary(result.summary);
+          setLiteratureReview(result.literature_review ?? '');
           setSourceFiles(result.source_files ?? []);
           setAppState('results');
           if ((result.source_files?.length ?? 0) > 0) {
@@ -129,7 +138,9 @@ function App() {
     setFiles([]);
     setSources([]);
     setSummary('');
+    setLiteratureReview('');
     setSourceFiles([]);
+    setThinkingLogs([]);
     setShowSourceFilesPopup(false);
     setErrorMessage(null);
     setCurrentStep('finding-sources');
@@ -177,8 +188,11 @@ function App() {
               <p className="app__query-text">"{query}"</p>
             </div>
 
-            {/* Progress stepper */}
-            <ProgressStepper currentStep={currentStep} />
+            {/* Progress stepper with thinking stream */}
+            <ProgressStepper
+              currentStep={currentStep}
+              logs={thinkingLogs}
+            />
           </div>
         );
 
@@ -197,7 +211,7 @@ function App() {
               </button>
             </div>
 
-            <LiteratureReview sources={sources} summary={summary} />
+            <LiteratureReview sources={sources} summary={summary} literatureReview={literatureReview} />
 
             {/* Popup: source PDF files (names + download links) */}
             {showSourceFilesPopup && sourceFiles.length > 0 && (

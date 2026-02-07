@@ -21,7 +21,7 @@
  * =============================================================================
  */
 
-import type { LoadingStep } from '../types';
+import type { LoadingStep, ThinkingLog } from '../types';
 import './ProgressStepper.css';
 
 // -----------------------------------------------------------------------------
@@ -43,6 +43,8 @@ const STEPS: { key: LoadingStep; label: string }[] = [
 interface ProgressStepperProps {
     /** The currently active step */
     currentStep: LoadingStep;
+    /** Real-time thinking logs from the backend */
+    logs: ThinkingLog[];
 }
 
 // -----------------------------------------------------------------------------
@@ -75,7 +77,7 @@ function getStepStatus(
 // COMPONENT
 // -----------------------------------------------------------------------------
 
-export function ProgressStepper({ currentStep }: ProgressStepperProps) {
+export function ProgressStepper({ currentStep, logs }: ProgressStepperProps) {
     return (
         <div className="progress-stepper" role="status" aria-live="polite">
             {/* Header */}
@@ -117,7 +119,25 @@ export function ProgressStepper({ currentStep }: ProgressStepperProps) {
                             </div>
 
                             {/* Step label */}
-                            <span className="progress-stepper__label">{step.label}</span>
+                            <div className="progress-stepper__content">
+                                <span className="progress-stepper__label">{step.label}</span>
+
+                                {/* Thinking logs - shown ONLY for the active step to avoid clutter */}
+                                {status === 'active' && logs && logs.some(l => l.step === step.key) && (
+                                    <div className="progress-stepper__logs">
+                                        {logs
+                                            .filter(l => l.step === step.key)
+                                            .slice(-3) // Show last 3 for brevity
+                                            .map((log, i) => (
+                                                <div key={i} className="progress-stepper__log">
+                                                    <span className="progress-stepper__log-bullet">›</span>
+                                                    <span className="progress-stepper__log-text">{log.message}</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Active step has a pulsing dot */}
                             {status === 'active' && (

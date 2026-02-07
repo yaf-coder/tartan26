@@ -79,8 +79,10 @@ def clean_csv_in_place(csv_path: str, pdf_folder: str):
 
     with open(csv_path, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for i, row in enumerate(reader):
             total += 1
+            if total % 10 == 0:
+                print(f"[LOG] Cleaning and verifying quote {total}...", flush=True)
 
             quote = row.get("quote", "")
             filename = row.get("filename", "")
@@ -136,7 +138,8 @@ def main():
     if not csv_files:
         raise SystemExit(f"No CSV files found in: {csv_folder}")
 
-    for csv_path in sorted(csv_files):
+    for i, csv_path in enumerate(sorted(csv_files)):
+        print(f"[LOG] Cleaning CSV {i+1}/{len(csv_files)}: {os.path.basename(csv_path)}", flush=True)
         clean_csv_in_place(csv_path, pdf_folder)
 
 

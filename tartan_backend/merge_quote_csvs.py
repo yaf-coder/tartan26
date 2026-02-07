@@ -33,6 +33,7 @@ def main():
     seen_quotes = set()
 
     for path in sorted(csv_files):
+        print(f"[LOG] Merging quotes from {os.path.basename(path)}...", flush=True)
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
 

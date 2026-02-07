@@ -75,18 +75,29 @@ export interface ValidationStatus {
 // -----------------------------------------------------------------------------
 // APP STATE - The four possible states of the application
 // -----------------------------------------------------------------------------
-export type AppState = 
+export type AppState =
   | 'idle'      // Initial state, waiting for user input
   | 'loading'   // Processing the research query
   | 'results'   // Showing the literature review results
   | 'error';    // Something went wrong
 
 // -----------------------------------------------------------------------------
+// THINKING LOG - A granular progress message from the backend
+// -----------------------------------------------------------------------------
+export interface ThinkingLog {
+  /** The step this log belongs to */
+  step: LoadingStep;
+  /** The log message text */
+  message: string;
+  /** Timestamp for sorting/display (optional) */
+  timestamp: string;
+}
+
+// -----------------------------------------------------------------------------
 // LOADING STEP - The four steps shown during the loading process
 // -----------------------------------------------------------------------------
-export type LoadingStep = 
+export type LoadingStep =
   | 'finding-sources'    // Step 1: Finding relevant sources
   | 'extracting-quotes'  // Step 2: Extracting direct quotes
   | 'cross-checking'     // Step 3: Cross-checking claims
   | 'compiling';         // Step 4: Compiling the literature review
- 

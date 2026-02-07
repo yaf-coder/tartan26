@@ -11,12 +11,26 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import ssl
+import asyncio.subprocess
+import requests
 from pathlib import Path
 
+# Fix for macOS SSL certificate verification issues in dev environments
+ssl._create_default_https_context = ssl._create_unverified_context
+
+from dotenv import load_dotenv
+
 import arxiv
+from dedalus_labs import AsyncDedalus
+from tartan_backend.semantic_scholar import SemanticScholarClient
+from tartan_backend.openalex import OpenAlexClient
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+
+# Load environment before any other imports that might need it
+load_dotenv(dotenv_path=Path(__file__).parent / "tartan_backend" / ".env")
 
 # Paths
 ROOT = Path(__file__).resolve().parent
@@ -49,23 +63,118 @@ def user_query_to_arxiv_search(user_query: str) -> str:
     return user_query.strip()[:500]
 
 
-def fetch_papers_from_arxiv(papers_dir: str, query: str, max_results: int = 5) -> None:
-    """Search arXiv for the query and download PDFs into papers_dir."""
+async def rank_candidates(client: AsyncDedalus, query: str, candidates_list: list) -> list:
+    """Use LLM to rank paper candidates from multiple sources by relevance."""
+    if not candidates_list:
+        return []
+
+    # Prepare batch prompt
+    prompt_items = []
+    for i, res in enumerate(candidates_list):
+        # res can be either an arXiv Result or a Semantic Scholar Dict
+        title = getattr(res, "title", res.get("title") if isinstance(res, dict) else "Unknown")
+        summary = getattr(res, "summary", res.get("abstract") if isinstance(res, dict) else "No summary available")
+        if summary is None: summary = "No summary available"
+        prompt_items.append(f"ID: {i}\nTitle: {title}\nAbstract: {summary[:500]}...")
+
+    prompt = f"""
+Research Question: {query}
+
+Below are {len(candidates_list)} paper candidates. 
+
+TASK:
+1. Identify the primary ACADEMIC FIELD of the Research Question (e.g., "Chemistry", "Computer Science", "Physics").
+2. For each paper candidate, identify its ACADEMIC FIELD based on the title and abstract.
+3. Rank relevance (0-10):
+   - IF the paper's field DOES NOT MATCH the question's field, score it 0.
+   - ELSE score based on how well it answers the specific question.
+
+BE STRICT: "PFAS" (polyfluoroalkyl substances) is Chemistry. "PFAs" (Finite Automata) is Computer Science. DO NOT MIX THEM.
+
+CANDIDATES:
+{"---".join(prompt_items)}
+
+OUTPUT FORMAT:
+{{"question_field": "Field Name", "scores": [score_0, score_1, ...]}}
+""".strip()
+
+    try:
+        # MODEL HANDOFF: Using gpt-4o (not gpt-4o-mini) for paper ranking
+        # Rationale: This is a CRITICAL task requiring strong judgment to filter irrelevant papers.
+        # Better models = better rankings = higher quality research pipeline.
+        resp = await client.chat.completions.create(
+            model="openai/gpt-4o",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": "You are a research relevance filter. You categorize research papers and identify domain-mismatches. Output valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        data = json.loads(resp.choices[0].message.content.strip())
+        scores = data.get("scores", [])
+        
+        if not isinstance(scores, list) or len(scores) != len(candidates_list):
+            return candidates_list[:3]
+        
+        # Zip and sort by score
+        combined = []
+        for res, score in zip(candidates_list, scores):
+            combined.append((res, score))
+            
+        ranked = sorted(combined, key=lambda x: x[1], reverse=True)
+        # Filter: keep only papers with score > 6
+        filtered = [r for r, s in ranked if s > 6]
+        return filtered
+    except Exception:
+        return candidates_list[:3]
+
+PDF_MAGIC = b"%PDF"
+
+async def download_pdf_from_url(url: str, output_path: Path) -> bool:
+    """Download a PDF from an arbitrary URL (Open Access). Only saves if response is actually PDF."""
+    try:
+        response = await asyncio.to_thread(requests.get, url, timeout=30, stream=True)
+        response.raise_for_status()
+        first_chunk = next(response.iter_content(chunk_size=8), None)
+        if not first_chunk or not first_chunk.startswith(PDF_MAGIC):
+            print(f"Skipping non-PDF response from {url[:80]}... (got {first_chunk[:20] if first_chunk else b''!r})", flush=True)
+            return False
+        with open(output_path, "wb") as f:
+            f.write(first_chunk)
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"Failed to download PDF from {url}: {e}", flush=True)
+        return False
+
+async def download_papers(papers_dir: str, results: list) -> None:
+    """Download PDFs for a list of mixed results (arXiv or Semantic Scholar) in parallel."""
     path = Path(papers_dir)
     path.mkdir(parents=True, exist_ok=True)
-    dirpath = str(path)
-    # Use small page_size so the API request asks for few results (arXiv rate-limits large requests)
-    client = arxiv.Client(page_size=max_results)
-    search = arxiv.Search(query=query.strip(), max_results=max_results)
-    for result in client.results(search):
+    
+    async def download_single(result):
+        """Download a single PDF."""
         try:
-            result.download_pdf(dirpath=dirpath)
+            if hasattr(result, "download_pdf"): # arXiv
+                # arXiv download_pdf is synchronous, run in thread
+                await asyncio.to_thread(result.download_pdf, dirpath=str(path))
+            elif isinstance(result, dict) and "openAccessPdf" in result: # Semantic Scholar
+                pdf_url = result["openAccessPdf"].get("url")
+                if pdf_url:
+                    # Create a safe filename
+                    safe_title = "".join([c if c.isalnum() else "_" for c in result["title"][:50]])
+                    pdf_name = f"{safe_title}.pdf"
+                    await download_pdf_from_url(pdf_url, path / pdf_name)
         except Exception:
-            continue
+            pass  # Continue on error
+    
+    # Download all PDFs in parallel
+    await asyncio.gather(*[download_single(r) for r in results], return_exceptions=True)
 
 
-def run_pipeline(papers_dir: str, csv_dir: str, output_csv: str, rq: str) -> str | None:
-    """Run run_all.py in tartan_backend. Returns path to merged CSV (with_ideas if generated)."""
+async def run_pipeline(papers_dir: str, csv_dir: str, output_csv: str, rq: str):
+    """Run run_all.py and yield logs (strings starting with [LOG])."""
     py = sys.executable
     cmd = [
         py,
@@ -76,42 +185,80 @@ def run_pipeline(papers_dir: str, csv_dir: str, output_csv: str, rq: str) -> str
         "--rq", rq,
         "--with_ideas",
     ]
-    result = subprocess.run(
-        cmd,
+    
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
         cwd=str(BACKEND),
-        capture_output=True,
-        text=True,
-        timeout=600,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    if result.returncode != 0:
+
+    async def _read_stream(stream, is_stderr=False):
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="ignore").strip()
+            if text.startswith("[LOG]"):
+                yield text[5:].strip()
+            elif is_stderr and text:
+                # Optionally log stderr if needed, but avoid flooding the thinking stream
+                pass
+
+    # Record tasks to read stdout/stderr
+    async for log_msg in _read_stream(process.stdout):
+        yield log_msg
+
+    return_code = await process.wait()
+    if return_code != 0:
+        stderr_data = await process.stderr.read()
         raise HTTPException(
             status_code=500,
-            detail=f"Pipeline failed: {result.stderr or result.stdout or 'Unknown error'}",
+            detail=f"Pipeline failed (code {return_code}): {stderr_data.decode('utf-8', errors='ignore')}",
         )
-
-    # Prefer _with_ideas.csv for summary and keyFindings
-    with_ideas = Path(output_csv).parent / (Path(output_csv).stem + "_with_ideas.csv")
-    if with_ideas.exists():
-        return str(with_ideas)
-    if Path(output_csv).exists():
-        return output_csv
-    raise HTTPException(status_code=500, detail="Pipeline produced no output CSV.")
 
 
 def run_summary(csv_path: str, rq: str) -> str:
-    """Run summarize_review.py and return summary text."""
+    """Run summarize_review.py to generate an executive summary."""
     py = sys.executable
-    result = subprocess.run(
-        [py, "summarize_review.py", "--input_csv", csv_path, "--rq", rq],
-        cwd=str(BACKEND),
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env={**os.environ},
-    )
-    if result.returncode != 0:
+    try:
+        result = subprocess.run(
+            [py, "summarize_review.py", "--input_csv", csv_path, "--rq", rq],
+            cwd=str(BACKEND),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout:
+            return result.stdout.strip()
+        # Return error message instead of empty string
+        error_msg = result.stderr.strip() if result.stderr else "Summary generation failed"
+        print(f"[ERROR] Summary failed: {error_msg}", flush=True, file=sys.stderr)
+        return ""
+    except Exception as e:
+        print(f"[ERROR] Exception in run_summary: {e}", flush=True, file=sys.stderr)
         return "Summary could not be generated."
-    return (result.stdout or "").strip() or "Summary could not be generated."
+
+
+def run_literature_review(csv_path: str, rq: str) -> dict:
+    """Generate comprehensive literature review document using Claude Sonnet."""
+    py = sys.executable
+    try:
+        result = subprocess.run(
+            [py, "generate_literature_review.py", "--input_csv", csv_path, "--rq", rq],
+            cwd=str(BACKEND),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0 and result.stdout:
+            return json.loads(result.stdout.strip())
+        error_msg = result.stderr.strip() if result.stderr else "Review generation failed"
+        print(f"[ERROR] Literature review failed: {error_msg}", flush=True, file=sys.stderr)
+        return {"error": "Literature review could not be generated"}
+    except Exception as e:
+        print(f"[ERROR] Exception in run_literature_review: {e}", flush=True, file=sys.stderr)
+        return {"error": str(e)}
 
 
 def csv_to_sources(csv_path: str) -> list[dict]:
@@ -190,48 +337,164 @@ async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
         papers_dir.mkdir()
         csv_dir.mkdir()
 
+        def emit(step: str) -> str:
+            return json.dumps({"type": "step", "step": step}) + "\n"
+
         for filename, content in files_data:
             if filename and filename.lower().endswith(".pdf"):
                 (papers_dir / (filename or "upload.pdf")).write_bytes(content)
-
-        def emit(step: str) -> str:
-            return json.dumps({"type": "step", "step": step}) + "\n"
 
         # Step 1: Finding sources
         yield emit("finding-sources")
         pdfs = list(papers_dir.glob("*.pdf"))
         if not pdfs:
-            arxiv_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
-            await asyncio.to_thread(fetch_papers_from_arxiv, str(papers_dir), arxiv_query, 5)
+            yield json.dumps({"type": "log", "message": f"Global research query: {query}"}) + "\n"
+            
+            try:
+                print(f"[DEBUG] Starting query conversion for: {query}", flush=True)
+                arxiv_query = await asyncio.to_thread(user_query_to_arxiv_search, query)
+                print(f"[DEBUG] Query converted to: {arxiv_query}", flush=True)
+                yield json.dumps({"type": "log", "message": f"Searching arXiv, Semantic Scholar, and OpenAlex for: {arxiv_query}"}) + "\n"
+            except Exception as e:
+                print(f"[ERROR] Query conversion failed: {e}", flush=True)
+                arxiv_query = query  # Fallback to original query
+                yield json.dumps({"type": "log", "message": f"Using original query: {arxiv_query}"}) + "\n"
+            
+            # Run all three source searches in parallel
+            def run_arxiv_search():
+                search = arxiv.Search(query=arxiv_query, max_results=50)
+                arxiv_client = arxiv.Client(page_size=50)
+                return list(arxiv_client.results(search))
+
+            ss_client = SemanticScholarClient()
+            openalex_client = OpenAlexClient()
+
+            async def search_arxiv():
+                try:
+                    results = await asyncio.to_thread(run_arxiv_search)
+                    print(f"[DEBUG] Found {len(results)} arXiv results", flush=True)
+                    return results
+                except Exception as e:
+                    print(f"[ERROR] arXiv search failed: {e}", flush=True)
+                    return []
+
+            async def search_semantic_scholar():
+                try:
+                    results = await asyncio.to_thread(ss_client.search_papers, arxiv_query, limit=50)
+                    oa = [r for r in results if r.get("openAccessPdf")]
+                    print(f"[DEBUG] Found {len(oa)} Semantic Scholar OA results", flush=True)
+                    return oa
+                except Exception as e:
+                    print(f"[ERROR] Semantic Scholar search failed: {e}", flush=True)
+                    return []
+
+            async def search_openalex():
+                try:
+                    results = await asyncio.to_thread(
+                        openalex_client.search_papers, arxiv_query, limit=25
+                    )
+                    print(f"[DEBUG] Found {len(results)} OpenAlex OA results", flush=True)
+                    return results
+                except Exception as e:
+                    print(f"[ERROR] OpenAlex search failed: {e}", flush=True)
+                    return []
+
+            arxiv_results, ss_oa_results, openalex_results = await asyncio.gather(
+                search_arxiv(),
+                search_semantic_scholar(),
+                search_openalex(),
+            )
+
+            primary_candidates = arxiv_results + ss_oa_results
+            if not primary_candidates and not openalex_results:
+                yield json.dumps({"type": "error", "detail": "No open-access papers found across arXiv, Semantic Scholar, or OpenAlex."}) + "\n"
+                return
+
+            dedalus_client = AsyncDedalus(api_key=os.getenv("DEDALUS_API_KEY"))
+            max_papers = 3
+
+            # Prioritize arXiv + Semantic Scholar; fill remaining slots from OpenAlex only
+            if primary_candidates:
+                yield json.dumps({"type": "log", "message": f"Ranking {len(primary_candidates)} candidates from arXiv and Semantic Scholar..."}) + "\n"
+                ranked_primary = await rank_candidates(dedalus_client, query, primary_candidates)
+                top_papers = ranked_primary[:max_papers]
+                remaining_slots = max_papers - len(top_papers)
+                if remaining_slots > 0 and openalex_results:
+                    yield json.dumps({"type": "log", "message": f"Filling {remaining_slots} slot(s) from OpenAlex ({len(openalex_results)} candidates)..."}) + "\n"
+                    ranked_openalex = await rank_candidates(dedalus_client, query, openalex_results)
+                    top_papers = top_papers + ranked_openalex[:remaining_slots]
+            else:
+                yield json.dumps({"type": "log", "message": f"Using OpenAlex only ({len(openalex_results)} candidates)..."}) + "\n"
+                ranked_openalex = await rank_candidates(dedalus_client, query, openalex_results)
+                top_papers = ranked_openalex[:max_papers]
+
+            all_considered = len(primary_candidates) + len(openalex_results)
+            discarded = all_considered - len(top_papers)
+            if len(top_papers) < 3:
+                yield json.dumps({"type": "log", "message": f"Note: Found {len(top_papers)} verified matches."}) + "\n"
+            else:
+                yield json.dumps({"type": "log", "message": f"Identified {len(top_papers)} highly relevant papers, discarded {discarded} domain-mismatches."}) + "\n"
+            
+            if not top_papers:
+                yield json.dumps({"type": "log", "message": "No verified matches found. Specialized niche research may be sparse."}) + "\n"
+                yield json.dumps({"type": "error", "detail": "All found papers were deemed irrelevant points. Try broader technical keywords."}) + "\n"
+                return
+
+            yield json.dumps({"type": "log", "message": f"Downloading {len(top_papers)} verified sources..."}) + "\n"
+            await download_papers(str(papers_dir), top_papers)
+            
             pdfs = list(papers_dir.glob("*.pdf"))
             if not pdfs:
-                yield json.dumps({"type": "error", "detail": "No papers could be found for this question. Try uploading PDFs as sources."}) + "\n"
+                yield json.dumps({"type": "error", "detail": "PDF download failed for selected papers (may be restricted Access)."}) + "\n"
                 return
+            yield json.dumps({"type": "log", "message": f"Successfully prepared {len(pdfs)} papers for analysis."}) + "\n"
+        else:
+            yield json.dumps({"type": "log", "message": f"Using {len(pdfs)} uploaded PDF(s) as sources"}) + "\n"
 
         # Step 2: Extracting quotes (run_pipeline: research_bot, clean, merge, synthesize)
         yield emit("extracting-quotes")
         output_csv = str(csv_dir / "all_quotes.csv")
         try:
-            csv_path = await asyncio.to_thread(
-                run_pipeline,
+            async for log_message in run_pipeline(
                 str(papers_dir),
                 str(csv_dir),
                 output_csv,
                 query,
-            )
+            ):
+                yield json.dumps({"type": "log", "message": log_message}) + "\n"
         except HTTPException as e:
             yield json.dumps({"type": "error", "detail": e.detail}) + "\n"
             return
 
-        # Step 3: Cross-checking (done after pipeline)
-        yield emit("cross-checking")
-        await asyncio.sleep(0.1)
+        # Prefer _with_ideas.csv for summary and keyFindings
+        csv_path = output_csv
+        with_ideas = Path(output_csv).parent / (Path(output_csv).stem + "_with_ideas.csv")
+        if with_ideas.exists():
+            csv_path = str(with_ideas)
+        
+        if not Path(csv_path).exists():
+             yield json.dumps({"type": "error", "detail": "Pipeline produced no output CSV."}) + "\n"
+             return
 
-        # Step 4: Compiling (run_summary)
+        # Step 3: Cross-checking
+        yield emit("cross-checking")
+        yield json.dumps({"type": "log", "message": "Analyzing cross-source consistency..."}) + "\n"
+        await asyncio.sleep(0.8)
+        yield json.dumps({"type": "log", "message": "Correlating claims with extracted evidence..."}) + "\n"
+        await asyncio.sleep(0.8)
+        yield json.dumps({"type": "log", "message": "Validating internal logical structure..."}) + "\n"
+        await asyncio.sleep(0.5)
+
+        # Step 4: Compiling executive summary
         yield emit("compiling")
+        yield json.dumps({"type": "log", "message": "Synthesizing executive summary with Claude Sonnet..."}) + "\n"
         summary = await asyncio.to_thread(run_summary, csv_path, query)
         sources = csv_to_sources(csv_path)
 
+        # Step 5: Generating comprehensive literature review
+        yield json.dumps({"type": "log", "message": "Generating comprehensive literature review..."}) + "\n"
+        lit_review = await asyncio.to_thread(run_literature_review, csv_path, query)
+        
         persistent_papers = (BACKEND / "papers").resolve()
         persistent_papers.mkdir(parents=True, exist_ok=True)
         source_files = []
@@ -244,6 +507,12 @@ async def _stream_research(query: str, files_data: list[tuple[str, bytes]]):
             "type": "result",
             "sources": sources,
             "summary": summary,
+            "literature_review": lit_review.get("review", "") if isinstance(lit_review, dict) else "",
+            "review_metadata": {
+                "word_count": lit_review.get("word_count", 0),
+                "sources_analyzed": lit_review.get("sources_analyzed", 0),
+                "evidence_items": lit_review.get("evidence_items", 0),
+            } if isinstance(lit_review, dict) and "review" in lit_review else {},
             "source_files": source_files,
         }) + "\n"
     finally:
