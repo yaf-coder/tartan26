@@ -40,6 +40,18 @@ def main():
         action="store_true",
         help="Do not deduplicate quotes when merging.",
     )
+    parser.add_argument(
+        "--with_ideas",
+        action="store_true",
+        help="After merging, add an 'idea' column using the AI agent.",
+    )
+    parser.add_argument(
+        "--ideas_model",
+        default="openai/gpt-4o-mini",
+        help="Model to use for idea synthesis (default: openai/gpt-4o-mini).",
+    )
+
+
     args = parser.parse_args()
 
     if not os.path.isdir(args.papers_dir):
@@ -87,6 +99,26 @@ def main():
     if args.no_dedupe:
         merge_cmd.append("--no-dedupe")
     run(merge_cmd)
+
+        # 4) Optionally add synthesized ideas column
+    if args.with_ideas:
+        merged_with_ideas = os.path.splitext(args.output_csv)[0] + "_with_ideas.csv"
+        run(
+            [
+                py,
+                "synthesize_ideas.py",
+                "--input_csv",
+                args.output_csv,
+                "--output_csv",
+                merged_with_ideas,
+                "--model",
+                args.ideas_model,
+                "--rq",
+                args.rq,
+            ]
+        )
+        print("Ideas CSV:", merged_with_ideas)
+
 
     print("\n✅ Done.")
     print("Merged CSV:", args.output_csv)

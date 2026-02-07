@@ -6,6 +6,20 @@ from typing import Optional
 
 from pypdf import PdfReader
 
+import shutil
+
+def backup_csv(csv_path: str):
+    """
+    Create a one-time backup of the CSV before destructive cleaning.
+    Backup name: originalname_raw.csv
+    """
+    base, ext = os.path.splitext(csv_path)
+    backup_path = f"{base}_raw{ext}"
+
+    if not os.path.exists(backup_path):
+        shutil.copy2(csv_path, backup_path)
+        print(f"Backup created: {os.path.basename(backup_path)}")
+
 
 def norm(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
@@ -58,6 +72,8 @@ def quote_exists_on_page(quote: str, page_text: str) -> bool:
 
 
 def clean_csv_in_place(csv_path: str, pdf_folder: str):
+    backup_csv(csv_path)
+    
     kept_rows = []
     total = 0
 
