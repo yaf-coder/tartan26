@@ -1,15 +1,19 @@
 /**
  * =============================================================================
- * PDF GENERATOR - WORKING VERSION
+ * PDF GENERATOR — Literature review and summary export
  * =============================================================================
- * 
- * Generates formatted PDF reports using jsPDF
- * =============================================================================
+ *
+ * Uses jsPDF to produce downloadable PDFs: executive summary only, or full
+ * report (summary + literature review content + references from sources).
+ * Handles markdown-style headings (# ## ###) and page breaks.
+ *
+ * Usage: await generatePDF({ title, content, sources?, type: 'summary' | 'full_report' })
  */
 
 import jsPDF from 'jspdf';
 import type { Source } from '../types';
 
+/** Options for PDF generation */
 interface PDFOptions {
     title: string;
     content: string;

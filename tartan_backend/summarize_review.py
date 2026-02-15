@@ -1,6 +1,21 @@
 """
-Generate a short literature-review summary from a merged quote CSV and research question.
-Prints the summary to stdout for capture by the API.
+=============================================================================
+SUMMARIZE REVIEW — Executive summary from quote CSV
+=============================================================================
+
+Reads a merged quote CSV (with optional "idea" column), builds a short evidence
+pack for the LLM, and prints a single paragraph executive summary to stdout.
+Used by the Veritas API after the pipeline completes to show the user a quick
+overview before the full literature review.
+
+Usage
+-----
+  python summarize_review.py --input_csv ./all_quotes_with_ideas.csv --rq "Your question"
+  # Summary printed to stdout; API captures it for the streamed result.
+
+Environment
+----------
+- DEDALUS_API_KEY : Required. Uses gpt-4o for summary quality.
 """
 import argparse
 import asyncio

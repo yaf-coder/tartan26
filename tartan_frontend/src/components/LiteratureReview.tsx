@@ -1,7 +1,16 @@
 /**
  * =============================================================================
- * LITERATURE REVIEW COMPONENT - POLISHED UI
+ * LITERATURE REVIEW — Results view: summary, full review, and source cards
  * =============================================================================
+ *
+ * Renders the post-research UI: stats (sources, quotes, findings), optional
+ * full literature review markdown, executive summary, and a list of expandable
+ * SourceCards. Provides PDF download for summary and for full report.
+ *
+ * PROPS:
+ * - sources: Source[]
+ * - summary: string (executive summary)
+ * - literatureReview?: string (full markdown review)
  */
 
 import { useState } from 'react';

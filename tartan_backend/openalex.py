@@ -1,6 +1,22 @@
 """
-OpenAlex client for searching academic works and fetching Open Access PDFs.
-Used as a backup source alongside arXiv and Semantic Scholar.
+=============================================================================
+OPENALEX CLIENT — Open Access paper search (backup source)
+=============================================================================
+
+Synchronous client for the OpenAlex API. Used by the Veritas API as a third
+source when running global research: arXiv and Semantic Scholar are tried
+first; OpenAlex fills remaining slots when needed. Results are normalized to
+the same shape as Semantic Scholar (title, abstract, openAccessPdf.url) for
+unified ranking and PDF download.
+
+Usage
+-----
+  client = OpenAlexClient()  # optional: api_key or OPENALEX_API_KEY
+  papers = client.search_papers("machine learning", limit=25)
+
+Environment
+----------
+- OPENALEX_API_KEY : Optional; can improve rate limits.
 """
 import os
 import logging

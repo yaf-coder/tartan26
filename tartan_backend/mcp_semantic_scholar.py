@@ -1,11 +1,19 @@
 """
-Semantic Scholar MCP Server
+=============================================================================
+SEMANTIC SCHOLAR MCP SERVER — Model Context Protocol for paper search
+=============================================================================
 
-An MCP (Model Context Protocol) server that provides tools for searching and
-retrieving research papers from the Semantic Scholar Academic Graph API.
+MCP server exposing Semantic Scholar as tools: search_papers, get_paper_details,
+search_papers_for_research (open-access only), get_paper_by_doi, get_paper_by_arxiv.
+Use with MCP-compatible clients (e.g. Cursor, Claude Desktop) via stdio transport.
 
-Run with: python mcp_semantic_scholar.py
-Or use with MCP-compatible clients via stdio transport.
+Run
+---
+  python mcp_semantic_scholar.py
+
+Environment
+----------
+- SEMANTIC_SCHOLAR_API_KEY : Optional; increases rate limits.
 """
 
 import os
