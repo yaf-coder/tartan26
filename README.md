@@ -4,7 +4,7 @@ Frontend (React + Vite) and backend (Python research pipeline) for literature re
 
 ---
 
-## Screenshots
+## App Workflow
 
 ### 1. Initial input
 
