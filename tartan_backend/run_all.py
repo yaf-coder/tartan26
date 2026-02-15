@@ -1,3 +1,28 @@
+"""
+=============================================================================
+RUN ALL — Full research quote pipeline (extract → clean → merge → ideas)
+=============================================================================
+
+Orchestrates the full sequence of scripts used by the Veritas API and CLI to
+turn a folder of PDFs and a research question into a single merged CSV of
+verified quotes, optionally with an "idea" column synthesized per quote.
+
+Steps (in order)
+----------------
+1. research_bot.py   : Extract quotes from each PDF (LLM + verification).
+2. clean_quotes_in_place.py : Verify each quote against PDF text; drop invalid rows.
+3. merge_quote_csvs.py     : Merge all CSVs into one (with optional dedupe).
+4. synthesize_ideas.py     : (if --with_ideas) Add "idea" column via LLM.
+
+Usage
+-----
+  python run_all.py --papers_dir ./papers --csv_dir ./csvs --output_csv ./all_quotes.csv --rq "Your question" [--with_ideas]
+
+Output
+------
+- output_csv (e.g. all_quotes.csv); if --with_ideas, also <stem>_with_ideas.csv.
+"""
+
 import argparse
 import os
 import subprocess
@@ -8,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def run(cmd):
-    """Run a command in this project directory."""
+    """Run a command in this project directory. Raises on non-zero exit."""
     print("\n▶", " ".join(cmd))
     subprocess.run(cmd, cwd=HERE, check=True)
 

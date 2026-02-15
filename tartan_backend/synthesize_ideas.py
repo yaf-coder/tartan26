@@ -1,3 +1,28 @@
+"""
+=============================================================================
+SYNTHESIZE IDEAS — Add one-sentence "idea" per quote for literature review
+=============================================================================
+
+Reads a cleaned/merged quote CSV (quote, page_number, filename) and adds an
+"idea" column: one concise academic sentence per quote, synthesized by an LLM.
+Output is written to a new CSV (default: <input_stem>_with_ideas.csv). Uses a
+persistent JSON cache keyed by normalized quote text to avoid re-synthesizing.
+
+Pipeline role
+-------------
+Run after merge_quote_csvs.py when --with_ideas is set (see run_all.py). The
+_with_ideas.csv is used by summarize_review.py and generate_literature_review.py
+for better summaries and full literature review.
+
+Usage
+-----
+  python synthesize_ideas.py --input_csv ./all_quotes.csv --rq "Your question" [--output_csv ...]
+
+Environment
+----------
+- DEDALUS_API_KEY : Required. Uses gpt-4o for higher-quality academic prose.
+"""
+
 import argparse
 import asyncio
 import csv

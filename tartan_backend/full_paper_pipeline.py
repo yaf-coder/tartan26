@@ -1,3 +1,29 @@
+"""
+=============================================================================
+FULL PAPER PIPELINE — Generate academic paper draft + PDF from quote CSV
+=============================================================================
+
+Standalone pipeline: given a papers directory, a merged quote CSV with "idea"
+column, and a research question, builds APA-style citations per PDF, then
+asks an LLM to write a concise academic paper with footnotes. Outputs Markdown
+and a rendered PDF. Not used by the main Veritas API; intended for CLI or
+batch use.
+
+Usage
+-----
+  python full_paper_pipeline.py --papers_dir ./papers --notes_csv ./all_quotes_with_ideas.csv --topic "PFAS" --rq "Your question" [--out_md ./paper.md] [--out_pdf ./paper.pdf]
+
+Output
+------
+- citations.json (APA reference + footnote per PDF)
+- out_md (default paper.md)
+- out_pdf (default paper.pdf)
+
+Environment
+----------
+- DEDALUS_API_KEY : Required for citation inference and paper generation.
+"""
+
 import argparse
 import asyncio
 import csv

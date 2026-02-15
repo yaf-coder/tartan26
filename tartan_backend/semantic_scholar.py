@@ -1,3 +1,24 @@
+"""
+=============================================================================
+SEMANTIC SCHOLAR CLIENT — Open Access paper search
+=============================================================================
+
+Synchronous client for the Semantic Scholar Academic Graph API. Used by the
+Veritas API to find open-access papers (with PDF URLs) when running global
+research (no user-uploaded PDFs). Results are shaped for compatibility with
+the pipeline's ranking and download steps.
+
+Usage
+-----
+  client = SemanticScholarClient()  # optional: api_key= for higher rate limits
+  papers = client.search_papers("PFAS water treatment", limit=50)
+  # Filter for openAccessPdf in app.py when downloading.
+
+Environment
+----------
+- SEMANTIC_SCHOLAR_API_KEY : Optional; increases rate limits if set.
+"""
+
 import os
 import requests
 from typing import List, Dict, Optional
@@ -5,10 +26,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class SemanticScholarClient:
     """
     Client for the Semantic Scholar Academic Graph API.
-    Focuses on finding Open Access papers with PDF links.
+    Focuses on finding Open Access papers with PDF links for the research pipeline.
     """
     BASE_URL = "https://api.semanticscholar.org/graph/v1"
 

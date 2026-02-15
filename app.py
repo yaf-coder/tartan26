@@ -1,7 +1,36 @@
 """
-Veritas API – connects the frontend to the research pipeline.
-POST /api/research: research query (required); optional PDF files as additional sources.
-Streams progress steps (NDJSON) then the final result so the frontend can sync the timeline.
+=============================================================================
+VERITAS API — Research pipeline gateway
+=============================================================================
+
+Connects the Veritas frontend to the full research pipeline: source discovery,
+quote extraction, synthesis, and literature review generation.
+
+Endpoints
+---------
+- GET  /              : Health check; returns API name and docs URL.
+- GET  /api/papers/<filename> : Download a source PDF by filename.
+- POST /api/research  : Run research (required: query; optional: PDF files).
+  - Request: multipart/form-data with `query` and optional `files[]`.
+  - Response: application/x-ndjson stream. Each line is a JSON object:
+    - {"type": "step", "step": "<finding-sources|extracting-quotes|...>"}
+    - {"type": "log", "message": "..."}
+    - {"type": "result", "sources": [...], "summary": "...", ...}
+    - {"type": "error", "detail": "..."}
+
+Flow (when no PDFs uploaded)
+--------------------------
+1. Convert user question → arXiv-style search query (query_to_arxiv.py).
+2. Search arXiv, Semantic Scholar, and OpenAlex in parallel.
+3. Rank candidates with an LLM; keep top open-access papers.
+4. Download PDFs, run run_all.py (research_bot → clean → merge → synthesize).
+5. Generate executive summary and full literature review.
+6. Stream result with sources, summary, literature_review, source_files.
+
+Environment
+----------
+- DEDALUS_API_KEY : Required for LLM calls (query conversion, ranking, summary, review).
+- .env loaded from tartan_backend/.env.
 """
 import asyncio
 import csv

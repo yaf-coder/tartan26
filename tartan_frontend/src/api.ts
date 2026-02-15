@@ -1,11 +1,19 @@
 /**
- * API client for the Veritas backend.
- * VITE_API_URL defaults to http://localhost:8000 (set in .env for production).
+ * =============================================================================
+ * API.TS — Veritas backend client
+ * =============================================================================
+ *
+ * Handles research submission and NDJSON stream consumption. In development,
+ * Vite proxies /api to the backend; set VITE_API_URL in .env for production.
+ *
+ * Key exports:
+ * - submitResearchStream(query, files, callbacks): POST /api/research, consume stream.
+ * - getPaperDownloadUrl(filename): URL to download a source PDF.
  */
 
 import type { LoadingStep, Source, ThinkingLog } from './types';
 
-// In dev, use relative URL so Vite proxy forwards /api to the backend
+/** Base URL for API; empty in dev so relative /api/research uses Vite proxy */
 const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '';
 
 export interface ResearchResponse {

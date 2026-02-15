@@ -1,6 +1,27 @@
 """
-Convert a natural-language research question into a short arXiv search query.
-Prints the search query to stdout for use by the API.
+=============================================================================
+QUERY TO ARXIV — Natural language → arXiv search query
+=============================================================================
+
+Converts a user's research question into a concise, arXiv-appropriate search
+string (keywords/phrases, optionally with boolean operators). Used by the
+Veritas API so that global research (no uploaded PDFs) searches academic
+sources effectively.
+
+Usage
+-----
+  python query_to_arxiv.py --query "What are the health effects of PFAS?"
+  # Prints the search query to stdout (e.g. (PFAS OR "perfluoroalkyl") AND health).
+
+Strategy
+--------
+- Expand acronyms; use (Full Name OR Acronym) AND technical terms when helpful.
+- Output is a single line, no quotes or explanation (for piping).
+
+Environment
+----------
+- DEDALUS_API_KEY : If set, uses GPT-4o-mini via Dedalus for conversion.
+- If unset, falls back to sanitizing the question into a simple keyword query.
 """
 import argparse
 import asyncio

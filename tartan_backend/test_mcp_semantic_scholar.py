@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """
-Test script for the Semantic Scholar MCP server.
-Tests all tools and validates responses.
+=============================================================================
+TEST MCP SEMANTIC SCHOLAR — Test suite for Semantic Scholar MCP tools
+=============================================================================
+
+Runs async tests against the tool functions (search_papers, get_paper_details,
+search_papers_for_research, get_paper_by_arxiv, get_paper_by_doi, error handling).
+Does not start the MCP server; imports and calls the tool implementations directly.
+
+Usage
+-----
+  python test_mcp_semantic_scholar.py
+  # Exit 0 if all pass, 1 otherwise. Rate limits may cause some tests to skip.
 """
 
 import asyncio

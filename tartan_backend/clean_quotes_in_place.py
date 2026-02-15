@@ -1,12 +1,31 @@
+"""
+=============================================================================
+CLEAN QUOTES IN PLACE — Verify quotes against PDFs and drop invalid rows
+=============================================================================
+
+For each quote CSV in a directory, re-checks that each quote actually appears
+on the stated page of the referenced PDF. Rows that fail verification are
+removed. Creates a one-time backup (*_raw.csv) before overwriting. Used by
+run_all.py after research_bot.py and before merge_quote_csvs.py.
+
+Usage
+-----
+  python clean_quotes_in_place.py --csv_dir ./csvs --papers_dir ./papers
+
+Warning
+-------
+Overwrites CSV files in csv_dir (after backing up to <name>_raw.csv).
+"""
+
 import argparse
 import csv
 import os
 import re
+import shutil
 from typing import Optional
 
 from pypdf import PdfReader
 
-import shutil
 
 def backup_csv(csv_path: str):
     """

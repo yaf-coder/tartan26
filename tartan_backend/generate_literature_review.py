@@ -1,6 +1,22 @@
 """
-Generate a comprehensive literature review document from extracted quotes.
-Uses Claude Sonnet for best-in-class long-form academic writing.
+=============================================================================
+GENERATE LITERATURE REVIEW — Full markdown literature review from quote CSV
+=============================================================================
+
+Reads a merged quote CSV (with optional "idea" column), groups evidence by
+source, and asks an LLM to produce a structured literature review (1500–2000
+words) with introduction, methodology, key findings, discussion, conclusions,
+and references. Output is printed as JSON (review, word_count, sources_analyzed,
+evidence_items) for the Veritas API to stream to the frontend.
+
+Usage
+-----
+  python generate_literature_review.py --input_csv ./all_quotes_with_ideas.csv --rq "Your question"
+  # JSON printed to stdout; API captures and forwards to client.
+
+Environment
+----------
+- DEDALUS_API_KEY : Required. Uses gpt-4o for comprehensive academic synthesis.
 """
 import argparse
 import asyncio

@@ -1,15 +1,29 @@
 """
-seek_bot.py – Recursive arXiv research agent.
+=============================================================================
+SEEK BOT — Recursive arXiv research agent (MCP + Claude)
+=============================================================================
 
-Connects to a LOCAL arxiv-mcp-server (spawned as a subprocess) for paper
-search / download / read, and uses Dedalus + Claude for keyword extraction.
+Spawns a local arXiv MCP server as a subprocess and uses it to search, download,
+and read papers. At each recursion step, Claude (via Dedalus) extracts search
+keywords and cited paper titles from the current text; the bot then retrieves
+papers for each and recurses with depth-1. Useful for exploratory research
+from a seed prompt; not part of the main Veritas API pipeline.
 
-Setup:
-    pip install arxiv-mcp-server mcp dedalus_labs python-dotenv
+Setup
+-----
+  pip install arxiv-mcp-server mcp dedalus_labs python-dotenv
 
-Usage:
-    python seek_bot.py --prompt "Your research problem …" --depth 2
-    python seek_bot.py --prompt_file problem.txt   --depth 3
+Usage
+-----
+  python seek_bot.py --prompt "Your research problem …" --depth 2
+  python seek_bot.py --prompt_file problem.txt --depth 3 [--storage-path ./papers]
+
+Arguments
+---------
+  --prompt       : Inline research prompt text.
+  --prompt_file  : Path to a .txt file with the prompt (mutually exclusive with --prompt).
+  --depth        : Recursion depth (0 = do nothing; default 1).
+  --storage-path : Directory for downloaded papers (default: ./papers).
 """
 
 import argparse

@@ -1,3 +1,33 @@
+"""
+=============================================================================
+RESEARCH BOT — Quote extraction from PDFs with LLM verification
+=============================================================================
+
+Reads PDFs from a folder, chunks them by page ranges, and uses an LLM (Dedalus)
+to extract verbatim quotes that answer a given research question. Every quote
+is verified against the source PDF text before being written to CSV. Supports
+caching per (PDF hash + research question) to avoid re-running on unchanged inputs.
+
+Pipeline role
+-------------
+Run first in the quote pipeline (see run_all.py): produces one CSV per PDF in
+csv_dir (default: rq_quotes.csv). Output is then cleaned (clean_quotes_in_place.py),
+merged (merge_quote_csvs.py), and optionally augmented with ideas (synthesize_ideas.py).
+
+Usage
+-----
+  python research_bot.py --papers_dir ./papers --csv_dir ./csvs --rq "Your question"
+
+Output
+------
+- One CSV per run in csv_dir with columns: quote, page_number, filename.
+- Cache files in .cache/papers/ keyed by SHA256(pdf content) and SHA256(rq).
+
+Environment
+----------
+- DEDALUS_API_KEY : Required for LLM extraction and throttling.
+"""
+
 import argparse
 import asyncio
 import csv
@@ -22,9 +52,9 @@ from dedalus_labs import (
 # Load .env from same directory as this file (bulletproof)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-# ----------------------------
+# -----------------------------------------------------------------------------
 # Defaults (override via CLI)
-# ----------------------------
+# -----------------------------------------------------------------------------
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 # Reduced from 20 to 15 for faster processing
 DEFAULT_MAX_QUOTES_PER_PDF = 15
@@ -43,9 +73,11 @@ TRANSIENT_ERROR_WAIT_BASE = 3
 MAX_CHAT_ATTEMPTS = 5
 
 
-# ----------------------------
+# -----------------------------------------------------------------------------
 # Text utilities
-# ----------------------------
+# -----------------------------------------------------------------------------
+
+
 def normalize_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
@@ -138,9 +170,11 @@ def safe_json_loads(s: str) -> Optional[Any]:
         return None
 
 
-# ----------------------------
+# -----------------------------------------------------------------------------
 # Quote verification helpers
-# ----------------------------
+# -----------------------------------------------------------------------------
+
+
 def find_quote_page(quote: str, pages: List[Tuple[int, str]]) -> Optional[int]:
     q = normalize_ws(quote)
     if not q:
@@ -172,9 +206,11 @@ def dedupe_quotes(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-# ----------------------------
+# -----------------------------------------------------------------------------
 # LLM prompting
-# ----------------------------
+# -----------------------------------------------------------------------------
+
+
 SYSTEM = (
     "You extract evidence from documents for academic research.\n"
     "Only return quotes that appear EXACTLY in the provided text. No paraphrase.\n"

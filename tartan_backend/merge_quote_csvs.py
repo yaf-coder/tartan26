@@ -1,3 +1,23 @@
+"""
+=============================================================================
+MERGE QUOTE CSVs — Combine per-PDF quote files into one CSV
+=============================================================================
+
+Reads all CSV files in a directory (expected schema: quote, page_number, filename),
+merges their rows into a single CSV, and optionally deduplicates by normalized
+quote text. Used by run_all.py after clean_quotes_in_place.py to produce the
+single merged file used for summary and literature review.
+
+Usage
+-----
+  python merge_quote_csvs.py --csv_dir ./csvs --output_csv ./all_quotes.csv [--no-dedupe]
+
+Output
+------
+- One CSV with columns quote, page_number, filename (no "idea" column; that is
+  added by synthesize_ideas.py when run with --with_ideas).
+"""
+
 import argparse
 import csv
 import os

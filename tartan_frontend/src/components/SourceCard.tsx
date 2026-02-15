@@ -1,7 +1,14 @@
 /**
  * =============================================================================
- * SOURCE CARD - CLEAN MINIMAL DESIGN
+ * SOURCE CARD — Expandable card for a single research source
  * =============================================================================
+ *
+ * Displays source title, publisher, date, and a "Verified" badge. Expandable
+ * section shows link (if url set), verbatim quotes, and key findings. Used
+ * inside LiteratureReview to list all sources.
+ *
+ * PROPS:
+ * - source: Source (id, title, publisher, date, url, quotes, keyFindings)
  */
 
 import { useState } from 'react';
