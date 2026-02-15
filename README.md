@@ -4,6 +4,34 @@ Frontend (React + Vite) and backend (Python research pipeline) for literature re
 
 ---
 
+## Screenshots
+
+### 1. Initial input
+
+Enter your research question in the text area and optionally add PDFs by dragging and dropping or clicking to browse. Trust badges remind you that every claim is cited, every quote is traceable, and every conclusion is verifiable. Press Enter to submit or Shift+Enter for a new line.
+
+![Veritas initial input page](docs/screenshot-initial.png)
+
+### 2. Processing
+
+While the pipeline runs, a step-by-step progress view shows where you are: finding sources → extracting quotes → cross-checking claims → compiling review. The active step shows live sub-tasks (e.g. which chunk is being analyzed), and a progress bar reflects overall completion.
+
+![Veritas processing view](docs/screenshot-processing.png)
+
+### 3. Written results
+
+After the run completes, the Literature Review section shows counts for sources, quotes, and findings. You can download the **Comprehensive Research Report** (full literature review) or the **Executive Summary** as PDF. The summary gives a concise, evidence-based overview of the research question.
+
+![Veritas written results — executive summary and literature review](docs/screenshot-results.png)
+
+### 4. Sources
+
+Each source appears as an expandable card. Expand one to see its title, verification status, and all extracted quotes. Every quote is verbatim from the paper and traceable to the source, so you can verify claims yourself.
+
+![Veritas sources — expandable cards with verified quotes](docs/screenshot-sources.png)
+
+---
+
 ## Architecture overview
 
 | Layer | Role |
