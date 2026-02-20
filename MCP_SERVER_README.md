@@ -4,7 +4,7 @@ Production-ready Model Context Protocol (MCP) server providing 5 tools and 1 res
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Install dependencies
@@ -19,7 +19,7 @@ python -m mcp run tartan_backend/mcp_semantic_scholar.py
 
 ---
 
-## 🛠️ Tools (5)
+## Tools (5)
 
 ### 1. `search_papers`
 Search papers with filters for year, open access, and field of study.
@@ -33,8 +33,6 @@ Search papers with filters for year, open access, and field of study.
 }
 ```
 
-**Use Case:** General paper discovery with filtering
-
 ---
 
 ### 2. `get_paper_details`
@@ -46,11 +44,9 @@ Fetch comprehensive metadata for a paper by ID (includes citations, references, 
 }
 ```
 
-**Use Case:** Deep dive into specific paper
-
 ---
 
-### 3. `search_papers_for_research` ⭐
+### 3. `search_papers_for_research` 
 **Research-optimized** search returning only open-access PDFs, sorted by citations.
 
 ```python
@@ -59,8 +55,6 @@ Fetch comprehensive metadata for a paper by ID (includes citations, references, 
   "limit": 5
 }
 ```
-
-**Use Case:** Building research pipelines (our main use case)
 
 ---
 
@@ -86,14 +80,14 @@ Lookup by arXiv ID.
 
 ---
 
-## 📚 Resources (1)
+## Resources (1)
 
 ### `semanticscholar://info`
 API capabilities, rate limits, and usage information.
 
 ---
 
-## 🎯 Advanced Features
+## Additional Features
 
 ### 1. **Automatic Retry with Exponential Backoff**
 Gracefully handles rate limiting (429 errors):
@@ -151,17 +145,7 @@ Automatically extracts PDF URLs:
 }
 ```
 
-**Impact:** Enables automated PDF download for analysis
-
 ---
-
-## 🧪 Testing
-
-Comprehensive test suite with 6 tests covering all tools and error cases:
-
-```bash
-pytest tartan_backend/test_mcp_semantic_scholar.py -v
-```
 
 **Results:**
 ```
@@ -173,21 +157,7 @@ test_list_tools ✓
 test_info_resource ✓
 ```
 
----
-
-## 📈 Production Stats
-
-| Metric | Value |
-|--------|-------|
-| **Success Rate** | 99.9% |
-| **Cache Hit Rate** | 60% |
-| **Avg Response Time** | 450ms (cached: 12ms) |
-| **Concurrent Requests** | Up to 20 |
-| **Rate Limit Errors** | 0 (with retry logic) |
-
----
-
-## 🔗 Integration Example
+Integration Example
 
 Used in our research pipeline to find relevant papers:
 
@@ -208,35 +178,6 @@ for paper in papers:
 See [`app.py:324-334`](file:///Users/aditya/tartan26/app.py#L324-L334) for full integration.
 
 ---
-
-## 🏆 Why This Wins the Tool Calling Prize
-
-### 1. **Production-Ready**
-- ✅ Comprehensive error handling
-- ✅ Automatic retries
-- ✅ Persistent caching
-- ✅ Full test coverage
-
-### 2. **Advanced Features**
-- ✅ Exponential backoff
-- ✅ Rate limit handling
-- ✅ Cross-session caching
-- ✅ Open Access filtering
-
-### 3. **Real-World Integration**
-- ✅ Used in production research pipeline
-- ✅ Handles thousands of queries
-- ✅ Measurable performance impact
-
-### 4. **Best Practices**
-- ✅ Type hints throughout
-- ✅ Detailed docstrings
-- ✅ Comprehensive tests
-- ✅ Clear error messages
-
----
-
-## 📝 Code Quality
 
 **File:** [`tartan_backend/mcp_semantic_scholar.py`](file:///Users/aditya/tartan26/tartan_backend/mcp_semantic_scholar.py)  
 **Lines:** 270  
