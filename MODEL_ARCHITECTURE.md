@@ -15,7 +15,7 @@ Each stage uses the **cheapest model that can deliver acceptable quality** for t
 
 ---
 
-## 🔧 Implementation Details
+## Implementation Details
 
 ### Paper Ranking
 **File:** [`app.py:101-108`](file:///Users/aditya/tartan26/app.py#L101-L108)
