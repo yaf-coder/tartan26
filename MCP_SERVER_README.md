@@ -1,6 +1,6 @@
 # Semantic Scholar MCP Server
 
-Production-ready Model Context Protocol (MCP) server providing 5 tools and 1 resource for research paper discovery via Semantic Scholar API.
+Production-ready Model Context Protocol (MCP) server for research paper discovery via Semantic Scholar API.
 
 ---
 
@@ -101,8 +101,6 @@ for attempt in range(3):
         await asyncio.sleep(2 ** attempt)  # 2s, 4s, 6s
 ```
 
-**Impact:** 99.9% success rate even under heavy load
-
 ---
 
 ### 2. **Persistent Caching**
@@ -112,8 +110,6 @@ File-based cache for API responses:
 cache_file = Path(".cache/semantic_scholar_cache.json")
 # Hit rate: ~60% in production
 ```
-
-**Impact:** 60% reduction in API calls, faster responses
 
 ---
 
@@ -131,8 +127,6 @@ async def search_papers(...):
     except Exception:
         return {"papers": [], "error": "API error"}
 ```
-
-**Impact:** No crashes, always returns valid JSON
 
 ---
 
