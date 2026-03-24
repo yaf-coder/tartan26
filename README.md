@@ -1,6 +1,6 @@
 # Veritas — Hallucination-proof research
 
-Frontend (React + Vite) and backend (Python research pipeline) for literature review with **traceable quotes**: every claim is cited, every quote is verified against the source PDF, and every conclusion is verifiable.
+Frontend (React + Vite) and backend (Python research pipeline) for literature review with **traceable quotes**: every claim is cited, every quote is verified against the source PDF, and every conclusion is verifiable. Prize Winner @ Tartan Hacks.
 
 ---
 
